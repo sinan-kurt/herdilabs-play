@@ -1,0 +1,50 @@
+---
+import Base from "../layouts/Base.astro";
+import Ticket from "../components/Ticket.astro";
+import Icon from "../components/Icon.astro";
+import { GAMES, liveGames } from "../data/games";
+import { SITE } from "../site";
+const featured = liveGames[0];
+---
+<Base>
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <a class="hero-art" href={`/oyun/${featured.slug}/`} aria-label={`${featured.title} oyna`}>
+        <img src={featured.cover} alt={`${featured.title}: istasyondaki tuvaletin önünde peronda bekleyen tren`} width="1200" height="750" />
+        <span class="stamp">Yeni oyun</span>
+      </a>
+      <div>
+        <div class="eyebrow">{SITE.sub} · {SITE.tagline}</div>
+        <h1>{featured.title}</h1>
+        <p class="lead">{featured.tagline}</p>
+        <p>{featured.description[0]}</p>
+        <div class="chips">
+          {featured.features?.map((f) => <span class="chip">{f}</span>)}
+        </div>
+        <div class="cta">
+          <a class="btn" href={`/oyun/${featured.slug}/`}><Icon name="play" /> Hemen oyna</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="oyunlar">
+    <div class="wrap">
+      <div class="section-head">
+        <h2>Oyunlar</h2>
+        <p>Her biri birkaç dakikalık. Hepsi tarayıcıda.</p>
+      </div>
+      <div class="shelf">
+        {GAMES.map((g) => <Ticket game={g} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap how">
+      <div><Icon name="nodl" /><b>İndirme yok</b><p>Linke tıkla, oyun açılsın. Üyelik de istemiyoruz.</p></div>
+      <div><Icon name="phone" /><b>Telefonda da oynanır</b><p>Metroda, sırada, çay molasında. Dokunmatik kontroller hazır.</p></div>
+      <div><Icon name="save" /><b>Kaldığın yerden devam</b><p>İlerlemen bu cihazda saklanır, ertesi gün devam edersin.</p></div>
+    </div>
+  </section>
+</Base>

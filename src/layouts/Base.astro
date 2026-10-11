@@ -1,0 +1,51 @@
+---
+import "@fontsource/nunito/600.css";
+import "@fontsource/nunito/800.css";
+import "@fontsource/nunito/900.css";
+import "@fontsource/dynapuff/700.css";
+import "../styles/global.css";
+import { SITE } from "../site";
+const { title, description = SITE.description, image = "/og.jpg" } = Astro.props;
+const fullTitle = title ? `${title} · ${SITE.name} ${SITE.sub}` : `${SITE.name} · ${SITE.sub}`;
+const canonical = new URL(Astro.url.pathname, SITE.url).href;
+const ogImage = new URL(image, SITE.url).href;
+---
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>{fullTitle}</title>
+  <meta name="description" content={description} />
+  <link rel="canonical" href={canonical} />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <meta name="theme-color" content="#e2694f" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content={fullTitle} />
+  <meta property="og:description" content={description} />
+  <meta property="og:image" content={ogImage} />
+  <meta property="og:url" content={canonical} />
+  <meta name="twitter:card" content="summary_large_image" />
+</head>
+<body>
+  <header class="top">
+    <div class="wrap">
+      <a class="logo" href="/" aria-label={`${SITE.name} ${SITE.sub} ana sayfa`}>
+        <img src="/favicon.svg" alt="" width="38" height="38" />
+        <span><b>{SITE.name}</b><small>{SITE.sub}</small></span>
+      </a>
+      <nav class="nav" aria-label="Ana menü">
+        <a href="/#oyunlar">Oyunlar</a>
+        <a href="/hakkinda/">Hakkında</a>
+      </nav>
+    </div>
+  </header>
+  <main><slot /></main>
+  <footer class="foot">
+    <div class="wrap">
+      <span>© {new Date().getFullYear()} {SITE.name}. İstanbul'da yapıldı.</span>
+      <span>{SITE.instagram && <a href={`https://instagram.com/${SITE.instagram}`} rel="noopener">Instagram'da takip et</a>}</span>
+    </div>
+  </footer>
+</body>
+</html>

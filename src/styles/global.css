@@ -1,0 +1,134 @@
+/* Mola Oyunları — cream station-ticket world: cream paper, coral + line-teal accents, ink type.
+   Layout: one centered column (max 1120px), hero = featured game, shelf grid of ticket cards. */
+:root{
+  --paper:#fbf4e8; --paper-2:#f4ead8; --card:#fffaf1; --line:#e6d6bb;
+  --ink:#3b3226; --muted:#85745f; --coral:#e2694f; --coral-d:#c9553c;
+  --teal:#2fa39a; --teal-d:#1f6f68; --mustard:#e2a62a;
+  --shadow:0 14px 34px rgba(60,40,20,.14), 0 2px 6px rgba(60,40,20,.10);
+  --display:"DynaPuff","Nunito",ui-rounded,system-ui,sans-serif;
+  --body:"Nunito",ui-rounded,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --r:20px;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --paper:#1f1b17; --paper-2:#28221c; --card:#2c2620; --line:#463c31; --ink:#f4ead8; --muted:#b8a78f;
+    --shadow:0 14px 34px rgba(0,0,0,.35), 0 2px 6px rgba(0,0,0,.3); color-scheme:dark; }
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.55}
+a{color:inherit}
+img{max-width:100%;display:block}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:20px}
+h1,h2,h3{font-family:var(--display);font-weight:700;line-height:1.05;margin:0;text-wrap:balance}
+.eyebrow{font-size:12px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--teal)}
+:focus-visible{outline:3px solid var(--teal);outline-offset:3px;border-radius:8px}
+
+/* header */
+.top{position:sticky;top:0;z-index:5;background:color-mix(in srgb, var(--paper) 88%, transparent);backdrop-filter:blur(10px);border-bottom:1.5px solid var(--line)}
+.top .wrap{display:flex;align-items:center;gap:16px;padding-block:12px}
+.logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.logo img{width:38px;height:38px}
+.logo b{font-family:var(--display);font-size:20px;letter-spacing:.01em}
+.logo small{display:block;font-size:11px;font-weight:900;letter-spacing:.16em;text-transform:uppercase;color:var(--muted);margin-top:-2px}
+.nav{margin-left:auto;display:flex;gap:4px}
+.nav a{text-decoration:none;font-weight:800;font-size:14px;padding:8px 12px;border-radius:999px}
+.nav a:hover{background:var(--paper-2)}
+
+/* buttons & chips */
+.btn{display:inline-flex;align-items:center;gap:8px;font:inherit;font-weight:900;font-size:16px;text-decoration:none;cursor:pointer;border:0;border-radius:14px;padding:13px 22px;background:var(--coral);color:#fff;box-shadow:0 6px 16px rgba(226,105,79,.35)}
+.btn:hover{background:var(--coral-d)}
+.btn.ghost{background:var(--card);color:var(--ink);border:1.5px solid var(--line);box-shadow:none}
+.btn.ghost:hover{background:var(--paper-2)}
+.btn svg{width:18px;height:18px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:var(--paper-2);border:1.5px solid var(--line);color:var(--ink)}
+.chip.new{background:var(--teal);border-color:var(--teal);color:#fff}
+
+/* hero */
+.hero{padding-block:36px 20px}
+.hero-grid{display:grid;grid-template-columns:1.25fr 1fr;gap:34px;align-items:center}
+.hero-art{position:relative;border-radius:26px;overflow:hidden;box-shadow:var(--shadow);border:2px solid var(--line);aspect-ratio:16/10;background:#d9d4ca}
+.hero-art img{width:100%;height:100%;object-fit:cover}
+.hero-art .stamp{position:absolute;left:16px;top:16px;background:var(--teal);color:#fff;font-weight:900;font-size:12px;letter-spacing:.12em;text-transform:uppercase;padding:6px 12px;border-radius:999px}
+.hero h1{font-size:clamp(44px,7vw,78px);color:var(--coral);margin:8px 0 10px}
+.hero .lead{font-size:20px;font-weight:700;margin:0 0 6px}
+.hero p{color:var(--muted);margin:0 0 18px;max-width:46ch}
+.hero .cta{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+
+/* section */
+.section{padding-block:40px}
+.section-head{display:flex;align-items:end;justify-content:space-between;gap:12px;margin-bottom:18px}
+.section-head h2{font-size:32px}
+.section-head p{margin:0;color:var(--muted)}
+
+/* ticket cards */
+.shelf{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:18px}
+.ticket{position:relative;display:flex;flex-direction:column;background:var(--card);border:1.5px solid var(--line);border-radius:var(--r);overflow:hidden;text-decoration:none;box-shadow:var(--shadow);transition:transform .18s}
+a.ticket:hover{transform:translateY(-4px)}
+.ticket .art{aspect-ratio:16/10;background:#d9d4ca;position:relative;overflow:hidden}
+.ticket .art img{width:100%;height:100%;object-fit:cover}
+.ticket .art.soon{display:grid;place-items:center}
+.ticket .art.soon svg{width:42%;height:auto}
+.ticket .art.soon::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(-45deg, rgba(255,255,255,.07) 0 14px, transparent 14px 28px)}
+.ticket .perf{position:relative;height:0;border-top:2px dashed var(--line);margin-inline:14px}
+.ticket .perf::before,.ticket .perf::after{content:"";position:absolute;top:-11px;width:20px;height:20px;border-radius:50%;background:var(--paper)}
+.ticket .perf::before{left:-26px} .ticket .perf::after{right:-26px}
+.ticket .body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:6px;flex:1}
+.ticket h3{font-size:24px}
+.ticket .tl{margin:0;color:var(--muted);font-size:14.5px;flex:1}
+.ticket .meta{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;font-size:12px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.ticket .go{color:var(--coral)}
+.ticket.is-soon{opacity:.82}
+.ticket.is-soon .go{color:var(--muted)}
+
+/* how */
+.how{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+.how div{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r);padding:18px}
+.how b{display:block;font-size:17px;margin-bottom:4px}
+.how p{margin:0;color:var(--muted);font-size:14.5px}
+.how svg{width:26px;height:26px;color:var(--teal);margin-bottom:8px}
+
+/* game page */
+.crumb{font-size:14px;font-weight:800;color:var(--muted);padding-top:22px}
+.crumb a{text-decoration:none}
+.game-head{display:flex;flex-wrap:wrap;align-items:end;justify-content:space-between;gap:12px;padding-block:10px 18px}
+.game-head h1{font-size:clamp(38px,6vw,60px);color:var(--coral)}
+.game-head p{margin:6px 0 0;font-size:18px;font-weight:700}
+.player{position:relative;border-radius:22px;overflow:hidden;border:2px solid var(--line);box-shadow:var(--shadow);background:#2a2e31;aspect-ratio:16/10}
+.player iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.player .gate{position:absolute;inset:0;display:grid;place-items:center;background:center/cover no-repeat}
+.player .gate::before{content:"";position:absolute;inset:0;background:rgba(30,26,22,.35)}
+.player .gate .btn{position:relative;font-size:20px;padding:16px 30px}
+.player-bar{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end;margin-top:12px}
+.game-info{display:grid;grid-template-columns:1.4fr 1fr;gap:26px;padding-block:30px}
+.game-info h2{font-size:24px;margin-bottom:10px}
+.game-info p{margin:0 0 12px;max-width:62ch}
+.game-info ul{margin:0;padding-left:20px}
+.game-info li{margin-bottom:6px}
+.facts{background:var(--card);border:1.5px solid var(--line);border-radius:var(--r);padding:16px 18px;display:grid;gap:10px;align-content:start}
+.facts div{display:flex;justify-content:space-between;gap:10px;font-size:14.5px;border-bottom:1.5px dashed var(--line);padding-bottom:8px}
+.facts div:last-child{border:0;padding:0}
+.facts span{color:var(--muted);font-weight:700}
+.facts b{text-align:right}
+
+/* footer */
+.foot{border-top:1.5px solid var(--line);margin-top:30px}
+.foot .wrap{display:flex;flex-wrap:wrap;gap:12px;justify-content:space-between;padding-block:24px;font-size:14px;color:var(--muted)}
+.foot a{font-weight:800;text-decoration:none}
+
+@media (max-width:860px){
+  .hero-grid,.game-info{grid-template-columns:1fr}
+  .hero{padding-block:20px 6px}
+  .how{grid-template-columns:1fr}
+  .section{padding-block:28px}
+}
+@media (max-width:520px){
+  .wrap{padding-inline:16px}
+  .logo small{display:none}
+  .section-head{flex-direction:column;align-items:flex-start}
+  .nav a{padding:8px 9px}
+  .hero .lead{font-size:18px}
+  .player{aspect-ratio:4/5}
+}
+@media (prefers-reduced-motion:reduce){ a.ticket{transition:none} a.ticket:hover{transform:none} }

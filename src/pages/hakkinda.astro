@@ -1,0 +1,15 @@
+---
+import Base from "../layouts/Base.astro";
+import { SITE } from "../site";
+---
+<Base title="Hakkında">
+  <section class="section">
+    <div class="wrap" style="max-width:720px">
+      <div class="eyebrow">{SITE.sub}</div>
+      <h1 style="font-size:48px;color:var(--coral);margin:8px 0 16px">Kısa mola, küçük kaos.</h1>
+      <p>{SITE.name} İstanbul'da kurulan küçük bir oyun stüdyosu. Mola Oyunları da bizim tarayıcı rafımız: metroda, sırada ya da çay demlenirken birkaç dakikada açılıp oynanan, gündelik hayatın komik kaosundan çıkan oyunlar.</p>
+      <p>Her oyun tek bir linkle açılır; indirme yok, üyelik yok. Yeni oyunlar düzenli olarak rafa ekleniyor.</p>
+      <p><a class="btn" href="/#oyunlar" style="margin-top:8px">Oyunlara göz at</a></p>
+    </div>
+  </section>
+</Base>

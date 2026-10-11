@@ -1,0 +1,82 @@
+---
+import Base from "../../layouts/Base.astro";
+import Ticket from "../../components/Ticket.astro";
+import Icon from "../../components/Icon.astro";
+import { GAMES, liveGames } from "../../data/games";
+export function getStaticPaths() {
+  return liveGames.map((g) => ({ params: { slug: g.slug }, props: { game: g } }));
+}
+const { game } = Astro.props;
+const src = `/games/${game.slug}/`;
+const others = GAMES.filter((g) => g.slug !== game.slug);
+const fmt = (d) => d ? new Date(d).toLocaleDateString("tr-TR", { day: "numeric", month: "long", year: "numeric" }) : "—";
+---
+<Base title={game.title} description={`${game.title}: ${game.tagline} Tarayıcıda ücretsiz oyna.`} image={game.cover}>
+  <div class="wrap">
+    <div class="crumb"><a href="/#oyunlar">Oyunlar</a> / {game.title}</div>
+    <div class="game-head">
+      <div>
+        <h1>{game.title}</h1>
+        <p>{game.tagline}</p>
+      </div>
+      <div class="chips">
+        <span class="chip new">Yeni</span>
+        <span class="chip">{game.genre}</span>
+      </div>
+    </div>
+
+    <div class="player" id="player" data-src={src}>
+      <div class="gate" style={`background-image:url(${game.cover})`}>
+        <a class="btn" id="playBtn" href={src}><Icon name="play" /> Oyna</a>
+      </div>
+    </div>
+    <div class="player-bar">
+      <button class="btn ghost" id="fsBtn" type="button" hidden><Icon name="full" /> Tam ekran</button>
+      <a class="btn ghost" href={src} target="_blank" rel="noopener"><Icon name="ext" /> Yeni sekmede aç</a>
+    </div>
+
+    <div class="game-info">
+      <div>
+        <h2>Oyun hakkında</h2>
+        {game.description.map((p) => <p>{p}</p>)}
+        {game.controls && <>
+          <h2 style="margin-top:22px">Nasıl oynanır</h2>
+          <ul>{game.controls.map((c) => <li>{c}</li>)}</ul>
+        </>}
+      </div>
+      <aside class="facts" aria-label="Oyun bilgileri">
+        <div><span>Tür</span><b>{game.genre}</b></div>
+        <div><span>Oturum</span><b>{game.session}</b></div>
+        <div><span>Platform</span><b>Tarayıcı · Mobil</b></div>
+        <div><span>Çıkış</span><b>{fmt(game.released)}</b></div>
+        <div><span>Fiyat</span><b>Ücretsiz</b></div>
+      </aside>
+    </div>
+
+    {others.length > 0 && <section class="section" style="padding-top:0">
+      <div class="section-head"><h2>Diğer oyunlar</h2></div>
+      <div class="shelf">{others.map((g) => <Ticket game={g} />)}</div>
+    </section>}
+  </div>
+
+  <script>
+    const player = document.getElementById("player");
+    const btn = document.getElementById("playBtn");
+    const fs = document.getElementById("fsBtn");
+    // Phones get the game as its own full page (more room, real fullscreen feel); desktops embed it here.
+    const small = matchMedia("(max-width: 760px), (pointer: coarse)").matches;
+    if (!small && player && btn) {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        const f = document.createElement("iframe");
+        f.src = player.dataset.src;
+        f.title = "Oyun";
+        f.allow = "fullscreen; autoplay";
+        player.replaceChildren(f);
+        f.focus();
+        if (fs && player.requestFullscreen) fs.hidden = false;
+      });
+      fs?.addEventListener("click", () => player.requestFullscreen?.().catch(() => {}));
+    }
+  </script>
+</Base>
