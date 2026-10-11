@@ -43,3 +43,9 @@ Sitede değişiklik yapınca `npm run build` sonrası çıktıyı göreli linkle
 - `npm test`: ekonomi, servis, zaman aşımı, kayıt doğrulama testleri.
 - `npm run build:pages`: siteyi derler ve göreli bağlantılarla `docs/` içine hazırlar.
 - Görsel/dokunmatik kabul testi: telefonda bir gün oyna; kısa/uzun basma, kat değişimi, yıkama, arka plana geçince duraklama ve gün sonu sonrası yenilemeyi kontrol et.
+
+## Dolmuş Durağı ilk sürümü
+
+`public/games/dolmus-duragi/` içerisinde bağımsız oyun. Kontroller dokun-seç/dokun-yerleştir; 4×3 koltuklar, 2 başlangıç hattı, üçüncü hat yükseltmesi, 4 yolcu tipi, 3 dakikalık 5 gün ve gün sonu yerel kayıt. Cam kenarı dış sütunlar, kapıya yakın yer ön sıradır. Valiz/çift aynı sırada yan yana 2 koltuk ister. İlk binen yolcu sürücü sayacını başlatır; dolu ve doğru hat +%25 kazanç sağlar. Yanlış hat yolcusu ücret getirmez ve kaçan yolcu sayılır. İlk gün üç dalgada 36 yolcu grubu; sonraki günler dalga başına +2 grup. Üçüncü günden itibaren yağmur 6 ek grup getirir. Bu denge değerleri oyuncu testiyle ayarlanmalıdır.
+
+Yedi ek birim testi: koltuk çakışması, tercihler/hatlar, bonus, otomatik kalkış/dönüş, sabır istismarı, gün sonu/alışveriş ve yağmur. Gerçek mobil dokunmatik ve görsel doğrulama henüz yapılmadı. Sürükle-bırak, karakter rig’i, İngilizce, müzik ve ortak oyun motoru bu sürümde yok.
