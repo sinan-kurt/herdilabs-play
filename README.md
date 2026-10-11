@@ -35,3 +35,11 @@ Her `git push` sonrası Dokploy'dan Deploy (ya da otomatik deploy) yeterli.
 `docs/` klasörü yayındaki sitenin derlenmiş halidir (göreli linklerle, alt dizinde çalışır).
 Sitede değişiklik yapınca `npm run build` sonrası çıktıyı göreli linklere çevirip `docs/`'a koymak gerekir
 (ya da Claude'a "siteyi güncelle" de).
+
+## Çay Ocağı ilk sürümü
+
+`public/games/cay-ocagi/` bağımsız, dokunmatik bir oyun içerir. 3 dakikalık günler, 5 günlük hafta, 4 müşteri tipi, 4 yükseltme ve gün sonunda ayrı bir localStorage kaydı vardır. Tarif katkıları otomatik eklenir; açık/koyu seçimi basılı tutma süresine bağlıdır. Toplantılar parçalı teslim kabul eder. İngilizce, ortak motor, müzik ve hareketli kamera bu sürüme dahil değildir.
+
+- `npm test`: ekonomi, servis, zaman aşımı, kayıt doğrulama testleri.
+- `npm run build:pages`: siteyi derler ve göreli bağlantılarla `docs/` içine hazırlar.
+- Görsel/dokunmatik kabul testi: telefonda bir gün oyna; kısa/uzun basma, kat değişimi, yıkama, arka plana geçince duraklama ve gün sonu sonrası yenilemeyi kontrol et.
