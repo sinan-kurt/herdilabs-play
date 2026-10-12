@@ -35,3 +35,10 @@ Her `git push` sonrası Dokploy'dan Deploy (ya da otomatik deploy) yeterli.
 `docs/` klasörü yayındaki sitenin derlenmiş halidir (göreli linklerle, alt dizinde çalışır).
 Sitede değişiklik yapınca `npm run build` sonrası çıktıyı göreli linklere çevirip `docs/`'a koymak gerekir
 (ya da Claude'a "siteyi güncelle" de).
+
+## Oyunlar
+Üç oyun da tek dosyalık HTML (`public/games/<slug>/index.html`). Çay Ocağı ve Dolmuş Durağı, Flush Rush ile aynı ortak motordan (karakter rig'i, müzik, HUD, kayıt) derlenir.
+Sinan'ın ilk Çay Ocağı / Dolmuş Durağı denemeleri git geçmişinde duruyor: `e2c1a8e`.
+
+## Yayın
+`npm run build:pages` siteyi derler ve göreli bağlantılarla `docs/` içine hazırlar (GitHub Pages: main /docs).
