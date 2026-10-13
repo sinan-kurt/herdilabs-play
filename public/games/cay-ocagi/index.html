@@ -138,6 +138,16 @@ button:focus-visible{outline:3px solid var(--mint);outline-offset:2px}
   .clockbar{display:none}
   .dock button{min-width:50px;padding:5px 7px 3px;font-size:11px}
 }
+/* juice */
+.modal-wrap:not([hidden]){animation:mwIn .28s ease-out both}
+.modal-wrap:not([hidden]) .modal{animation:mIn .42s cubic-bezier(.2,1.4,.4,1) both}
+@keyframes mwIn{from{background:rgba(59,50,38,0)}}
+@keyframes mIn{from{opacity:0;transform:translateY(26px) scale(.9)}}
+.pill.bump{animation:bump .38s cubic-bezier(.2,1.6,.4,1)}
+@keyframes bump{40%{transform:scale(1.18);background:#fff3c4}}
+.stat b.pop{animation:bump .4s cubic-bezier(.2,1.6,.4,1);display:inline-block}
+@media (prefers-reduced-motion:reduce){.modal-wrap:not([hidden]),.modal-wrap:not([hidden]) .modal,.pill.bump,.stat b.pop{animation:none}}
+
 body{background:#cfe4ea}
 :root{--coral:#c9541c;--orange:#d9822b}
 .brand{background:#a8401a}
@@ -275,7 +285,7 @@ function startMusic(){
   if(!hatBuf){ const n = Math.floor(actx.sampleRate*.03); hatBuf = actx.createBuffer(1, n, actx.sampleRate); const d = hatBuf.getChannelData(0); for(let i=0;i<n;i++) d[i]=(Math.random()*2-1)*(1-i/n); }
   mGain = actx.createGain(); mGain.gain.setValueAtTime(0, actx.currentTime); mGain.gain.linearRampToValueAtTime(.45, actx.currentTime+1.2); mGain.connect(actx.destination);
   mNext = actx.currentTime + .08; mStep = 0;
-  mTimer = setInterval(() => { const B = 60/MUSIC.bpm/2; while(mNext < actx.currentTime + .15){ mStepPlay(mStep, mNext); mNext += B; mStep++; } }, 30);
+  mTimer = setInterval(() => { const B = 60/(MUSIC.bpm*(1 + .12*(typeof J!=="undefined" ? J.tension : 0)))/2; while(mNext < actx.currentTime + .15){ mStepPlay(mStep, mNext); mNext += B; mStep++; } }, 30);
 }
 function stopMusic(){
   if(!mTimer) return; clearInterval(mTimer); mTimer = null;
@@ -369,9 +379,10 @@ function drawBubble(sx, sy, txt){
   ctx.fillStyle=C.ink; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(txt, bx+w/2, by+14, w-12);
 }
 function drawFloats(){
-  for(const f of G.floats){ const s = toScreen(f.x, f.y);
+  for(const f of G.floats){ const s = toScreen(f.x, f.y), age = 1.4 - f.life, k = clamp(age/.18, 0, 1), sc = 1 + .55*Math.sin(k*Math.PI)*(f.big?1:.6);
+    ctx.save(); ctx.translate(s[0], s[1]-f.rise); ctx.scale(sc, sc);
     ctx.globalAlpha = clamp(f.life/.5,0,1); ctx.font = f.big ? "700 20px DynaPuff, Nunito, sans-serif" : "800 14px Nunito, sans-serif";
-    ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.lineWidth=5; ctx.strokeStyle="#fff"; ctx.strokeText(f.txt, s[0], s[1]-f.rise); ctx.fillStyle=f.col; ctx.fillText(f.txt, s[0], s[1]-f.rise); }
+    ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.lineWidth=5; ctx.strokeStyle="#fff"; ctx.strokeText(f.txt, 0, 0); ctx.fillStyle=f.col; ctx.fillText(f.txt, 0, 0); ctx.restore(); }
   ctx.globalAlpha = 1;
 }
 function vignette(){
@@ -411,7 +422,7 @@ function upgradesHtml(){
 function wireUpgrades(rerender){
   $("modalCard").querySelectorAll("[data-up]").forEach(b => b.onclick = () => {
     const u = UPGRADES.find(x=>x.id===b.dataset.up), lv=upLv(u.id), cost=u.costs[lv];
-    if(save.money>=cost){ save.money-=cost; save.up[u.id]=lv+1; persist(); sfx.coin(); if(typeof applyUpgrades==="function") applyUpgrades(); rerender(); updateHud(true); }
+    if(save.money>=cost){ save.money-=cost; save.up[u.id]=lv+1; persist(); sfx.coin(); if(typeof applyUpgrades==="function") applyUpgrades(); rerender(); if(state==="play") updateHud(true); else $("hMoney").textContent = "₺"+save.money.toLocaleString("tr-TR"); }
   });
 }
 function showShop(){ pauseForModal(); const r = () => { openModal(`<h2>${ic("spark")}Geliştir</h2><p class="sub">Kasa: <b>₺${save.money}</b>. Yükseltmeler hemen etkili olur.</p>${upgradesHtml()}`); wireUpgrades(r); }; r(); }
@@ -438,8 +449,78 @@ let last = 0;
 function loop(ts){
   const raw = Math.min(.05, (ts-last)/1000 || 0); last = ts;
   if(state==="play" && G.speed>0){ update(raw*G.speed); updateHud(); }
-  render();
+  render(); drawJuice(raw);
   requestAnimationFrame(loop);
+}
+
+// ---------- juice: coin fly to wallet, rings, tension ticks, end-of-day sequence ----------
+const J = { coins:[], rings:[], tension:0, tickT:0, pulse:0, stamp:null, flash:0 };
+function moneyPill(){ const el = $("hMoney"); return el ? (el.closest(".pill") || el) : null; }
+function payFx(sx, sy, amt){
+  const el = moneyPill(); if(!el) return;
+  const r = el.getBoundingClientRect(), cr = cv.getBoundingClientRect(), tx = r.left - cr.left + 22, ty = r.top - cr.top + r.height/2;
+  const n = clamp(Math.round(amt/2)+1, 2, 9);
+  for(let i=0;i<n;i++) J.coins.push({x:sx, y:sy, sx, sy, tx, ty, t:-i*.05, dur:rand(.55,.75), bx:rand(-60,60), by:rand(-90,-40), last:i===n-1});
+  J.rings.push({x:sx, y:sy, t:0, col:"#f2c230", max:46});
+}
+function ringFx(sx, sy, col, max=40){ J.rings.push({x:sx, y:sy, t:0, col, max}); }
+function badFx(sx, sy){ ringFx(sx, sy, "#d64545", 52); J.flash = Math.max(J.flash, .35); }
+function bumpMoney(){ const el = moneyPill(); if(!el) return; el.classList.remove("bump"); void el.offsetWidth; el.classList.add("bump"); }
+// call every update with the most urgent patience fraction (0 = about to leave, 1 = relaxed)
+function tension(fr, dt){
+  const target = fr < .4 ? clamp(1 - fr/.4, 0, 1) : 0;
+  J.tension = lerp(J.tension, target, Math.min(1, dt*3));
+  if(target > 0){ J.tickT -= dt; if(J.tickT <= 0){ J.tickT = lerp(.9, .32, target); tickSfx(target); J.pulse = 1; } }
+  else J.tickT = 0;
+}
+function tickSfx(k){ tone(1250 + k*500, .045, "square", .022 + k*.02); if(k > .6) tone(620, .06, "triangle", .03, 0, .05); }
+function drawJuice(dt){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  // tension edge glow
+  J.pulse = Math.max(0, J.pulse - dt*2.4);
+  const tv = J.tension*(.45 + J.pulse*.55);
+  if(tv > .02 && state==="play"){ const g = ctx.createRadialGradient(VW/2, VH/2, Math.min(VW,VH)*.35, VW/2, VH/2, Math.max(VW,VH)*.75);
+    g.addColorStop(0, "rgba(214,69,69,0)"); g.addColorStop(1, `rgba(214,69,69,${(tv*.32).toFixed(3)})`); ctx.fillStyle = g; ctx.fillRect(0,0,VW,VH); }
+  if(J.flash > 0){ J.flash -= dt; ctx.fillStyle = `rgba(214,69,69,${(Math.max(0,J.flash)*.25).toFixed(3)})`; ctx.fillRect(0,0,VW,VH); }
+  // rings
+  for(const r of J.rings){ r.t += dt; const k = r.t/.5; ctx.globalAlpha = Math.max(0, 1-k); ctx.strokeStyle = r.col; ctx.lineWidth = 4*(1-k)+1; ctx.beginPath(); ctx.arc(r.x, r.y, 8 + r.max*k, 0, 6.3); ctx.stroke(); }
+  J.rings = J.rings.filter(r => r.t < .5); ctx.globalAlpha = 1;
+  // coins
+  for(const c of J.coins){ c.t += dt; if(c.t < 0) continue; const k = clamp(c.t/c.dur, 0, 1), e = k*k*(3-2*k);
+    const x = lerp(c.sx, c.tx, e) + c.bx*Math.sin(k*Math.PI)*.6, y = lerp(c.sy, c.ty, e) + c.by*Math.sin(k*Math.PI);
+    const s = 7 - 2*k; ctx.fillStyle = "#f2c230"; ctx.strokeStyle = "#a8741a"; ctx.lineWidth = 1.6; ctx.beginPath(); ctx.ellipse(x, y, s*Math.abs(Math.cos(c.t*9))+1.5, s, 0, 0, 6.3); ctx.fill(); ctx.stroke();
+    if(k >= 1 && !c.done){ c.done = true; tone(1500 + rand(0,300), .05, "triangle", .035); if(c.last) bumpMoney(); } }
+  J.coins = J.coins.filter(c => !c.done);
+  // end-of-day stamp
+  const st = J.stamp;
+  if(st){ st.t += dt; const k = clamp(st.t/.35, 0, 1), sc = 1 + 1.6*(1-k)*(1-k), fade = st.t > st.dur - .3 ? clamp((st.dur - st.t)/.3, 0, 1) : 1;
+    ctx.fillStyle = `rgba(40,30,20,${(.35*clamp(st.t/.4,0,1)).toFixed(3)})`; ctx.fillRect(0,0,VW,VH);
+    ctx.save(); ctx.globalAlpha = k*fade; ctx.translate(VW/2, VH*.42); ctx.rotate(-.06); ctx.scale(sc, sc);
+    ctx.font = `700 ${Math.min(64, VW/9)|0}px DynaPuff, Nunito, sans-serif`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    const w = ctx.measureText(st.txt).width + 60, h = Math.min(64, VW/9)*1.6;
+    ctx.fillStyle = "#fff8ec"; rr(-w/2, -h/2, w, h, 18); ctx.fill(); ctx.lineWidth = 5; ctx.strokeStyle = st.col; ctx.stroke();
+    ctx.fillStyle = st.col; ctx.fillText(st.txt, 0, 2);
+    ctx.font = "800 15px Nunito, sans-serif"; ctx.fillStyle = "#fff"; ctx.fillText(st.sub, 0, h/2 + 22);
+    ctx.restore();
+    for(const p of st.conf){ p.vy += 260*dt; p.x += p.vx*dt; p.y += p.vy*dt; p.r += p.vr*dt; ctx.save(); ctx.globalAlpha = fade; ctx.translate(p.x, p.y); ctx.rotate(p.r); ctx.fillStyle = p.c; ctx.fillRect(-4, -2.5, 8, 5); ctx.restore(); }
+    if(st.t >= st.dur){ J.stamp = null; st.done(); } }
+}
+// end-of-day: freeze the scene, stamp + confetti, then open the summary with counting numbers
+function endSequence(txt, sub, col, done){
+  state = "end"; setSpeed(0); J.tension = 0; J.coins.forEach(c => c.done = true); J.coins = [];
+  const cols = ["#e2694f","#f2c230","#4fb08f","#2fa39a","#7b4fa0","#fff8ec"];
+  const conf = Array.from({length:70}, () => ({x:VW/2 + rand(-60,60), y:VH*.42, vx:rand(-340,340), vy:rand(-520,-160), r:rand(0,6), vr:rand(-8,8), c:pick(cols)}));
+  J.stamp = {txt, sub, col, t:0, dur:1.7, conf, done:() => { done(); countUp(); }};
+  tone(523,.14,"square",.05); tone(659,.14,"square",.05,0,.13); tone(784,.14,"square",.05,0,.26); tone(1047,.32,"square",.05,0,.39); noise(.3,.04,3000);
+}
+function countUp(){
+  $("modalCard").querySelectorAll(".stat b").forEach((b, i) => {
+    const m = b.textContent.match(/^(₺?)(\d+)([,.]\d+)?$/); if(!m) return;
+    const pre = m[1], end = parseFloat(m[2] + (m[3]||"").replace(",", ".")), dec = m[3] ? 1 : 0, t0 = performance.now() + i*120;
+    const step = now => { const k = clamp((now - t0)/700, 0, 1), v = end*(1 - Math.pow(1-k, 3));
+      b.textContent = pre + (dec ? v.toFixed(1).replace(".", ",") : Math.round(v)); if(k < 1) requestAnimationFrame(step); else b.classList.add("pop"); };
+    b.textContent = pre + "0"; requestAnimationFrame(step);
+  });
 }
 
 // ---------- characters ----------
@@ -751,7 +832,7 @@ function serveSeat(s){
 function pay(s, sat, q){
   const T = TYPES[s.type], tip = (q==="tav" && sat>65) ? 1 : 0, amt = (3 + tip) * T.pay;
   save.money += amt; G.revenue += amt; G.served++; G.satSum += clamp(sat,0,100); G.satN++;
-  floatText(s.x, floorY(s.L)-70, "+₺"+amt, sat>=60 ? C.good : C.coral, true); sfx.coin();
+  floatText(s.x, floorY(s.L)-70, "+₺"+amt, sat>=60 ? C.good : C.coral, true); sfx.coin(); { const sc = toScreen(s.x, floorY(s.L)-56); payFx(sc[0], sc[1], amt); }
 }
 function say(s, txt, d=2.4){ s.bubble = {txt, t:d}; sfx.bark(); }
 
@@ -760,9 +841,9 @@ function finishMeeting(ok){
   const m = G.meet, ms = G.seats.filter(s=>s.kind==="meet");
   if(ok){ let sum = 0; ms.forEach(s => sum += s.sat||0); const sat = sum/4, amt = 12 + (sat>70 ? 4 : 0);
     save.money += amt; G.revenue += amt; G.served += 4; G.satSum += sat*4; G.satN += 4;
-    floatText(270, floorY(4)-90, `Toplantı +₺${amt}`, C.good, true); sfx.coin(); sparkle(270, floorY(4)-60); m.state = "drinking"; m.t = 10; }
+    floatText(270, floorY(4)-90, `Toplantı +₺${amt}`, C.good, true); sfx.coin(); { const sc = toScreen(270, floorY(4)-60); payFx(sc[0], sc[1], amt); } sparkle(270, floorY(4)-60); m.state = "drinking"; m.t = 10; }
   else { const served = m.served, amt = served*2; save.money += amt; G.revenue += amt; G.angry += 4 - served; G.satN += 4; G.satSum += served*40;
-    floatText(270, floorY(4)-90, "Çaysız toplantı!", C.bad, true); sfx.angry();
+    floatText(270, floorY(4)-90, "Çaysız toplantı!", C.bad, true); sfx.angry(); { const sc = toScreen(270, floorY(4)-60); badFx(sc[0], sc[1]); }
     ms.forEach(s => { if(s.state==="want"){ s.state="idle"; say(s, pick(["Çay yok mu bu şirkette?","Toplantı bitti, çay gelmedi."]), 2.2); } });
     m.state = "drinking"; m.t = 4; }
 }
@@ -776,6 +857,7 @@ function updateMeeting(dt){
 
 // ---------- update ----------
 function update(dt){
+  { const os = orders(); tension(os.length ? Math.min(...os.map(o=>o.fr)) : 1, dt); }
   G.t += dt;
   const prog = clamp(G.t/G.dayLen,0,1);
   if(G.t>=G.dayLen && !G.closing){ G.closing = true; announce("Mesai bitti. Son çaylar...", "sun"); }
@@ -798,7 +880,7 @@ function update(dt){
     if(s.state==="idle" && s.kind==="desk"){ s.cool -= dt*mul; if(s.cool<=0 && !G.closing){ s.state = "want"; s.wait = 0; if(Math.random()<.4) say(s, s.type==="patron" ? pick(["Çaycı! Bir çay!","Çayım nerede?"]) : pick(["Bir çay alabilir miyim?","Çaycı abi!","Tavşan kanı olsun."])); } }
     else if(s.state==="want"){ s.wait += dt;
       const T = TYPES[s.type];
-      if(s.kind==="desk" && s.wait > T.patience){ s.state = "idle"; s.cool = rand(30,55); G.angry++; G.satN++; say(s, pick(["Kendim yaparım o zaman!","Unutuldum herhalde.","Çay da gelmedi..."])); sfx.angry(); floatText(s.x, floorY(s.L)-70, "Kızgın!", C.bad, true);
+      if(s.kind==="desk" && s.wait > T.patience){ s.state = "idle"; s.cool = rand(30,55); G.angry++; G.satN++; { const sc = toScreen(s.x, floorY(s.L)-60); badFx(sc[0], sc[1]); } say(s, pick(["Kendim yaparım o zaman!","Unutuldum herhalde.","Çay da gelmedi..."])); sfx.angry(); floatText(s.x, floorY(s.L)-70, "Kızgın!", C.bad, true);
         if(s.type==="patron"){ G.seats.filter(o=>o.L===s.L && o!==s).forEach(o=>{ if(o.state==="want") o.wait += 8; }); } }
     } else if(s.state==="drink"){ s.drink -= dt; if(s.drink<=0){ s.state = "idle"; s.dirty = true; s.cup = null; s.cool = rand(36,64); } }
   }
@@ -1128,7 +1210,7 @@ function endDay(){
   save.best = Math.max(save.best||0, G.revenue);
   const finished = save.day; save.day++; persist();
   const r = () => { openModal(`<h2>${ic("sun")}Gün ${finished} bitti</h2><p class="sub">${quip}</p>${statsHtml()}<div class="box" style="background:transparent;border:0;padding:0"><h4>${ic("spark")}Geliştir · Kasa ₺${save.money}</h4></div>${upgradesHtml()}<div class="actions"><button type="button" class="cta" id="bNext">Gün ${save.day}'e geç ${ic("play")}</button></div>`, false); wireUpgrades(r); $("bNext").onclick = () => showWelcome(); };
-  r();
+  endSequence("Mesai bitti!", `Gün ${finished} · ${G.served} çay · ₺${G.revenue}`, "#c94f3a", r);
 }
 
 // attract scene
