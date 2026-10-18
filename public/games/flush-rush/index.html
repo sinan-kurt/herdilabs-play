@@ -1486,13 +1486,13 @@ function welcomeHtml(withCta=true){
   <div class="tip">${ic("spark")}<span>Temiz kabin bahşiş getirir. Titiz VIP lekeli kabine girmez ama iki kat öder.</span></div>
   ${withCta ? `<div class="actions"><button type="button" class="cta" id="bGo">${day1?"Hadi başlayalım!":"Kapıları aç"} ${ic("play")}</button></div>` : ""}`;
 }
-function startShift(z){ audio(); $("modal").hidden = true; modalPrev = null; newDay(); $("tutHint").hidden = true; if(save.day===1 && !save.tut && (!z || z.tut)) setupTutorial(); if(z) restoreShift(z); if(G.tut) showTutHint(); state="play"; setSpeed(1); resumeSpeed=1; followHold=0; fitCamera(); updateHud(true); if(z) announce("Kaldığın yerden devam: "+$("hClock").textContent, "play"); }
+function startShift(z){ audio(); $("modal").hidden = true; modalPrev = null; newDay(); $("tutHint").hidden = true; if(!z && save.day===1 && !save.tut) setupTutorial(); if(z) restoreShift(z); if(G.tut) showTutHint(); state="play"; setSpeed(1); resumeSpeed=1; followHold=0; fitCamera(); updateHud(true); if(z) announce("Kaldığın yerden devam: "+$("hClock").textContent, "play"); }
 function showWelcome(){
   const z = savedShift();
   if(z){
     state = "menu";
     const mins = 9*60 + Math.floor(clamp(z.t/150,0,1)*12*60), hh = String(Math.floor(mins/60)).padStart(2,"0")+":"+String(Math.floor(mins%60/10)*10).padStart(2,"0");
-    openModal(`<h2>${ic("toilet")}Vardiyan yarım kaldı</h2><p class="sub">Gün ${save.day}, saat ${hh}. Kazancın ve dükkanın son hali kaydedildi; içerideki müşteriler gitmiş olacak.</p>
+    openModal(`<h2>${ic("toilet")}Vardiyan yarım kaldı</h2><p class="sub">Gün ${save.day}, saat ${hh}. Müşteriler, kuyruk, kirler ve sepetin bıraktığın gibi duruyor.</p>
       <div class="stats"><div class="stat"><span>Bugünkü kazanç</span><b>₺${z.revenue}</b></div><div class="stat"><span>Hizmet verilen</span><b>${z.served}</b></div><div class="stat"><span>Kasa</span><b>₺${save.money}</b></div></div>
       <div class="actions"><button type="button" class="cta" id="bGo">Vardiyaya devam et ${ic("play")}</button></div>`, false);
     $("bGo").onclick = () => startShift(z);
@@ -1592,18 +1592,30 @@ function drawTut(){
   ctx.globalAlpha = .5 + .5*Math.sin(performance.now()/180); ctx.strokeStyle = "#f2c230"; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(sc[0], sc[1]+30, 30, 12, 0, 0, 6.3); ctx.stroke(); ctx.globalAlpha = 1;
 }
 const SHIFT_KEY = SAVE_KEY + "_shift";
-function snapshotShift(){
-  return {day:save.day, t:G.t, closing:G.closing, served:G.served, happy:G.happy||0, angry:G.angry, slips:G.slips, revenue:G.revenue, satSum:G.satSum, satN:G.satN,
-    stalls:G.stalls.map(s => ({dirt:s.dirt, clog:s.clog, paper:s.paper})), sinks:G.sinks.map(k => ({dirt:k.dirt, soap:k.soap})),
-    puddles:G.puddles.map(p => ({x:p.x, y:p.y, amt:p.amt, r:p.r, kind:p.kind})), carry:G.player.carry, px:G.player.x, py:G.player.y, tut:G.tut ? G.tut.step : 0};
+// ---------- object-graph save: keeps shared references (seat <-> passenger, stall <-> customer) intact ----------
+function packGraph(root, skip){
+  const ids = new Map(), table = [];
+  const enc = v => {
+    if(typeof v === "function") return undefined;
+    if(v === null || typeof v !== "object") return (typeof v === "number" && !isFinite(v)) ? {$n:String(v)} : v;
+    if(ids.has(v)) return {$r:ids.get(v)};
+    const id = table.length; ids.set(v, id); table.push(null);
+    if(Array.isArray(v)) table[id] = {$a:v.map(x => { const e = enc(x); return e === undefined ? null : e; })};
+    else { const o = {}; for(const k in v){ if(v === root && skip && skip.includes(k)) continue; const e = enc(v[k]); if(e !== undefined) o[k] = e; } table[id] = o; }
+    return {$r:id};
+  };
+  enc(root); return table;
 }
+function unpackGraph(table){
+  const objs = table.map(t => t && t.$a ? [] : {});
+  const dec = v => (v === null || typeof v !== "object") ? v : v.$r !== undefined ? objs[v.$r] : v.$n !== undefined ? Number(v.$n) : v;
+  table.forEach((t, i) => { if(t.$a) t.$a.forEach(x => objs[i].push(dec(x))); else for(const k in t) objs[i][k] = dec(t[k]); });
+  return objs[0];
+}
+function snapshotShift(){ return {day:save.day, t:G.t, revenue:G.revenue, served:G.served, graph:packGraph(G, ["particles","floats","marker"])}; }
 function restoreShift(z){
-  Object.assign(G, {t:z.t, closing:z.closing, served:z.served, happy:z.happy, angry:z.angry, slips:z.slips, revenue:z.revenue, satSum:z.satSum, satN:z.satN});
-  z.stalls.forEach((v,i) => { if(G.stalls[i]) Object.assign(G.stalls[i], v); });
-  z.sinks.forEach((v,i) => { if(G.sinks[i]) Object.assign(G.sinks[i], v); });
-  G.puddles = z.puddles.map(p => ({...p, pts:Array.from({length:9},()=>rand(.72,1.15)), rot:rand(0,6)}));
-  G.player.carry = z.carry; G.player.x = z.px; G.player.y = z.py;
-  if(G.tut && z.tut) G.tut.step = z.tut;
+  G = unpackGraph(z.graph); G.particles = []; G.floats = []; G.marker = null;
+  for(const c of G.customers) c.T = TYPES[c.type];
 }
 let autoT = 0;
 function autosave(){ if(state!=="play" || !G) return; persist(); try{ localStorage.setItem(SHIFT_KEY, JSON.stringify(snapshotShift())); }catch(e){} }

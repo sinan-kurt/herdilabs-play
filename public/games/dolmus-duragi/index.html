@@ -148,6 +148,17 @@ button:focus-visible{outline:3px solid var(--mint);outline-offset:2px}
 .stat b.pop{animation:bump .4s cubic-bezier(.2,1.6,.4,1);display:inline-block}
 @media (prefers-reduced-motion:reduce){.modal-wrap:not([hidden]),.modal-wrap:not([hidden]) .modal,.pill.bump,.stat b.pop{animation:none}}
 
+.tuthint{position:absolute;left:50%;top:64px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100% - 32px);background:#fff8ec;border:2px solid #f2c230;border-radius:14px;padding:8px 14px;font-size:14px;font-weight:700;box-shadow:var(--shadow);pointer-events:none;z-index:1}
+.tuthint .i{width:18px;height:18px;color:var(--coral);flex:none}
+.tuthint small{font-weight:900;color:var(--muted);margin-right:2px}
+@media (max-width:760px){.tuthint{display:none!important}}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.step{position:relative;background:#fff;border:1.6px solid var(--line);border-radius:14px;padding:12px 10px 10px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}
+.step>b{position:absolute;top:-9px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--coral);color:#fff;font-size:12px;display:grid;place-items:center}
+.step .i{width:26px;height:26px;color:var(--coral)}
+.step strong{font-size:14px;font-weight:900}
+.step small{font-size:12px;color:var(--muted);line-height:1.35}
+
 body{background:#7cc6d9}
 :root{--coral:#d98b12;--orange:#e2a62a}
 .brand{background:#d98b12}
@@ -438,7 +449,7 @@ let autoT = 0;
 function autosave(){ if(state!=="play" || !G || typeof snapshotShift!=="function") return; persist(); try{ localStorage.setItem(SHIFT_KEY, JSON.stringify(Object.assign({day:save.day}, snapshotShift()))); }catch(e){} }
 function clearShift(){ try{ localStorage.removeItem(SHIFT_KEY); }catch(e){} }
 function savedShift(){ if(typeof restoreShift!=="function") return null; try{ const z = JSON.parse(localStorage.getItem(SHIFT_KEY)||"null"); return z && z.day===save.day ? z : null; }catch(e){ return null; } }
-function startShift(z){ audio(); $("modal").hidden = true; modalPrev = null; newDay(); if(z) restoreShift(z); state="play"; setSpeed(1); resumeSpeed=1; fitCamera(); updateHud(true); if(z) announce("Kaldığın yerden devam: "+$("hClock").textContent, "play"); }
+function startShift(z){ audio(); $("modal").hidden = true; modalPrev = null; newDay(); if(z) restoreShift(z); TUTS = null; tutEl().hidden = true; if(save.day===1 && !save.tut && typeof tutorialSteps==="function") startTutorial(tutorialSteps()); state="play"; setSpeed(1); resumeSpeed=1; fitCamera(); updateHud(true); if(z) announce("Kaldığın yerden devam: "+$("hClock").textContent, "play"); }
 function showPaused(){
   pauseForModal();
   openModal(`<h2>${ic("pause")}Mola</h2><p class="sub">Oyun duraklatıldı, ilerleme kaydedildi.</p><div class="actions"><button type="button" class="cta" id="bResume">Devam et ${ic("play")}</button></div>`);
@@ -448,7 +459,7 @@ function showWelcome(){
   const z = savedShift(); state = "menu";
   if(z){
     const hh = typeof clockAt==="function" ? ", saat "+clockAt(z.t) : "";
-    openModal(`<h2>${ic("play")}Yarım kalan gün</h2><p class="sub">Gün ${save.day}${hh}. Kazancın ve son durum kaydedildi; o an bekleyenler gitmiş olacak.</p>
+    openModal(`<h2>${ic("play")}Yarım kalan gün</h2><p class="sub">Gün ${save.day}${hh}. Her şey bıraktığın gibi duruyor.</p>
       <div class="stats"><div class="stat"><span>Bugünkü kazanç</span><b>₺${z.revenue||0}</b></div><div class="stat"><span>${typeof SERVED_LABEL!=="undefined" ? SERVED_LABEL : "Hizmet"}</span><b>${z.served||0}</b></div><div class="stat"><span>Kasa</span><b>₺${save.money}</b></div></div>
       <div class="actions"><button type="button" class="cta" id="bGo">Kaldığın yerden devam et ${ic("play")}</button></div>`, false);
     $("bGo").onclick = () => startShift(z);
@@ -467,7 +478,7 @@ let last = 0;
 function loop(ts){
   const raw = Math.min(.05, (ts-last)/1000 || 0); last = ts;
   if(state==="play" && G.speed>0){ update(raw*G.speed); updateHud(); autoT += raw; if(autoT > 4){ autoT = 0; autosave(); } }
-  render(); drawJuice(raw);
+  render(); drawJuice(raw); tutTick(); drawTutArrow();
   requestAnimationFrame(loop);
 }
 
@@ -539,6 +550,50 @@ function countUp(){
       b.textContent = pre + (dec ? v.toFixed(1).replace(".", ",") : Math.round(v)); if(k < 1) requestAnimationFrame(step); else b.classList.add("pop"); };
     b.textContent = pre + "0"; requestAnimationFrame(step);
   });
+}
+
+// ---------- hands-on first-day tutorial (games provide tutorialSteps()) ----------
+let TUTS = null;
+function startTutorial(steps){ TUTS = {steps, i:0}; showTutStep(); }
+function tutEl(){ let el = $("tutHint"); if(!el){ el = document.createElement("div"); el.id = "tutHint"; el.className = "tuthint"; el.hidden = true; $("game").appendChild(el); } return el; }
+function showTutStep(){ const st = TUTS.steps[TUTS.i], el = tutEl(); el.innerHTML = `${ic(st.icon||"hand")}<span><small>${TUTS.i+1}/${TUTS.steps.length}</small> ${st.hint}</span>`; el.hidden = false; if(typeof updateHud==="function" && G) updateHud(true); }
+function tutTick(){
+  if(!TUTS || state!=="play") return;
+  let moved = false;
+  while(TUTS && TUTS.steps[TUTS.i].done()){ TUTS.i++; moved = true;
+    if(TUTS.i >= TUTS.steps.length){ TUTS = null; tutEl().hidden = true; save.tut = 1; persist(); announce(typeof TUT_DONE!=="undefined" ? TUT_DONE : "Harika! Gerisi senin.", "spark"); }
+  }
+  if(moved){ tone(1600,.1,"sine",.07); tone(2100,.12,"sine",.06,0,.06); if(TUTS) showTutStep(); }
+}
+function tutChip(){ const st = TUTS.steps[TUTS.i]; return {icon:st.icon||"hand", txt:(typeof st.chip==="function" ? st.chip() : st.chip)||st.hint.replace(/<[^>]+>/g,""), urgent:true, go:st.go||null}; }
+function drawTutArrow(){
+  if(!TUTS || state!=="play") return; const w = TUTS.steps[TUTS.i].target && TUTS.steps[TUTS.i].target(); if(!w) return;
+  const sc = toScreen(w[0], w[1]), t = performance.now()/180, x = sc[0], y = sc[1] - 26 + Math.sin(t)*7;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = "#f2c230"; ctx.strokeStyle = "#3b3226"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(x, y+14); ctx.lineTo(x-14, y-4); ctx.lineTo(x-6, y-4); ctx.lineTo(x-6, y-22); ctx.lineTo(x+6, y-22); ctx.lineTo(x+6, y-4); ctx.lineTo(x+14, y-4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.globalAlpha = .5 + .5*Math.sin(t); ctx.strokeStyle = "#f2c230"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(sc[0], sc[1], 24, 0, 6.3); ctx.stroke(); ctx.globalAlpha = 1;
+}
+
+// ---------- object-graph save: keeps shared references (seat <-> passenger, stall <-> customer) intact ----------
+function packGraph(root, skip){
+  const ids = new Map(), table = [];
+  const enc = v => {
+    if(typeof v === "function") return undefined;
+    if(v === null || typeof v !== "object") return (typeof v === "number" && !isFinite(v)) ? {$n:String(v)} : v;
+    if(ids.has(v)) return {$r:ids.get(v)};
+    const id = table.length; ids.set(v, id); table.push(null);
+    if(Array.isArray(v)) table[id] = {$a:v.map(x => { const e = enc(x); return e === undefined ? null : e; })};
+    else { const o = {}; for(const k in v){ if(v === root && skip && skip.includes(k)) continue; const e = enc(v[k]); if(e !== undefined) o[k] = e; } table[id] = o; }
+    return {$r:id};
+  };
+  enc(root); return table;
+}
+function unpackGraph(table){
+  const objs = table.map(t => t && t.$a ? [] : {});
+  const dec = v => (v === null || typeof v !== "object") ? v : v.$r !== undefined ? objs[v.$r] : v.$n !== undefined ? Number(v.$n) : v;
+  table.forEach((t, i) => { if(t.$a) t.$a.forEach(x => objs[i].push(dec(x))); else for(const k in t) objs[i][k] = dec(t[k]); });
+  return objs[0];
 }
 
 // ---------- characters ----------
@@ -703,9 +758,9 @@ const CAR = {x:150, h:140};
 function carW(cols){ return 22 + cols*66 + 86; }
 const BAY_Y = [214, 364, 514];
 const LINES = [
-  {id:"kad", name:"Kadıköy", short:"KADIKÖY", col:"#e2694f"},
-  {id:"usk", name:"Üsküdar", short:"ÜSKÜDAR", col:"#2fa39a"},
-  {id:"bes", name:"Beşiktaş", short:"BEŞİKTAŞ", col:"#7b4fa0"},
+  {id:"kad", name:"Kadıköy", to:"Kadıköy'e", short:"KADIKÖY", col:"#e2694f"},
+  {id:"usk", name:"Üsküdar", to:"Üsküdar'a", short:"ÜSKÜDAR", col:"#2fa39a"},
+  {id:"bes", name:"Beşiktaş", to:"Beşiktaş'a", short:"BEŞİKTAŞ", col:"#7b4fa0"},
 ];
 const QX0 = 600, QDX = 50, QPER = 11;
 const DAY_LEN = 150;
@@ -760,7 +815,7 @@ function spawnGroup(fromX, fromY){
   const a = makePassenger(type, line, fromX, fromY); a.via = via && via.map(v=>[...v]); G.walkers.push(a);
   if(type==="cift"){ const b = makePassenger("cift", line, fromX+16, fromY+8); b.look = "cift2"; b.via = via && via.map(v=>[v[0]+14, v[1]+8]); a.partner = b; b.partner = a; G.walkers.push(b); }
 }
-function qSlot(i){ return {x: QX0 - (i%QPER)*QDX, y: WALK_Y + (i>=QPER ? 64 : 0)}; }
+function qSlot(i){ const per = VW < 760 ? 7 : QPER; return {x: QX0 - (i%per)*QDX, y: WALK_Y + Math.floor(i/per)*60}; }
 function updatePassengers(dt){
   const rainMul = G.rain.on ? 1.5 : 1;
   for(const p of G.walkers){
@@ -810,6 +865,15 @@ function fitCells(p, car, c, r){
   return seatAt(car, c, r) ? null : [[c, r]];
 }
 function isWindow(r){ return r===0 || r===2; }
+// would placing p at (c,r) satisfy its request?
+function wouldPlease(p, car, c, r){
+  const T = TYPES[p.type], cells = fitCells(p, car, c, r); if(!T.req || !cells) return false;
+  if(T.req==="window") return cells.some(([cc,rr]) => isWindow(rr));
+  if(T.req==="door") return cells.some(([cc,rr]) => isDoor(cc, rr, car));
+  if(T.req==="partner"){ const q = p.partner; if(!q || !q.seat || q.seat.car !== car) return false; const [c2,r2] = q.seat.cells[0]; return c2===c && Math.abs(r2-r)===1; }
+  return false;
+}
+function drawStar(x, y, R, fill){ ctx.beginPath(); for(let i=0;i<10;i++){ const a = -Math.PI/2 + i*Math.PI/5, rad = i%2 ? R*.45 : R; ctx.lineTo(x + Math.cos(a)*rad, y + Math.sin(a)*rad); } ctx.closePath(); ctx.fillStyle = fill; ctx.fill(); ctx.strokeStyle = "#a8741a"; ctx.lineWidth = 1.2; ctx.stroke(); }
 function isDoor(c, r, car){ return r===2 && (c===1 || c===2); }
 function evalMood(p){
   if(!p.seat) return "neutral";
@@ -820,7 +884,7 @@ function evalMood(p){
   return "happy";
 }
 function place(p, car, c, r){
-  if(car.line !== p.line){ say(p, `Bu ${LINES[car.line].name}'e gitmiyor!`, 1.8); sfx.nope(); shakeT = .25; return false; }
+  if(car.line !== p.line){ say(p, `${LINES[p.line].to} gidiyorum, bu ${LINES[car.line].name} dolmuşu!`, 2.2); floatText(car.x + car.w/2, car.y - 8, `Yanlış hat: ${LINES[p.line].name} yolcusu`, C.bad); sfx.nope(); shakeT = .25; return false; }
   const cells = fitCells(p, car, c, r);
   if(!cells){ sfx.nope(); floatText(seatPos(car,c,r).x, seatPos(car,c,r).y-30, TYPES[p.type].seats===2 ? "Yan yana iki boş koltuk lazım" : "Dolu", C.bad); return false; }
   if(p.seat) unseat(p);
@@ -882,10 +946,11 @@ function update(dt){
 function seatedAll(){ const out = []; for(const car of G.cars) for(const s of car.seats) if(s && !out.includes(s)) out.push(s); return out; }
 
 // ---------- input ----------
-function departHit(wx, wy){ for(const car of G.cars){ if(car.state!=="idle") continue; const bx = car.x + car.w + 10, by = car.y + CAR.h/2 - 22; if(wx>=bx && wx<=bx+86 && wy>=by && wy<=by+44) return car; } return null; }
+function yolla(car){ const nar = VW < 760, w = 86, h = nar ? 64 : 44; return {bx:car.x + car.w + 10, by:car.y + CAR.h/2 - h/2, w, h}; }
+function departHit(wx, wy){ for(const car of G.cars){ if(car.state!=="idle") continue; const b = yolla(car); if(wx>=b.bx-6 && wx<=b.bx+b.w+6 && wy>=b.by-6 && wy<=b.by+b.h+6) return car; } return null; }
 function passengerHit(wx, wy){
-  for(const p of [...G.queue].reverse()) if(Math.abs(wx-p.x) < 22 && wy < p.y+6 && wy > p.y-70) return p;
-  for(const p of seatedAll()) if(p.seat.car.state==="idle" && Math.hypot(wx-p.sx, wy-p.sy) < 22) return p;
+  for(const p of [...G.queue].reverse()) if(Math.abs(wx-p.x) < 25 && wy < p.y+14 && wy > p.y-80) return p;
+  for(const p of seatedAll()) if(p.seat.car.state==="idle" && Math.hypot(wx-p.sx, wy-p.sy) < 26) return p;
   return null;
 }
 function onPointerDown(wx, wy){
@@ -980,13 +1045,15 @@ function drawSeatsAndPeople(car){
   for(let c=0;c<car.cols;c++) for(let r=0;r<3;r++){
     const s = seatPos(car, c, r), occ = seatAt(car, c, r);
     let fill = "#f4ead8";
-    if(sel && car.state==="idle" && !occ){ fill = fit ? (fitCells(sel, car, c, r) ? "#d7f0dc" : "#f4ead8") : "#e3ddd2"; }
+    const please = fit && !occ && wouldPlease(sel, car, c, r);
+    if(sel && car.state==="idle" && !occ){ fill = fit ? (please ? "#9fdcae" : fitCells(sel, car, c, r) ? "#d7f0dc" : "#f4ead8") : "#e3ddd2"; }
     const hov = G.hover && G.hover.car===car && G.hover.c===c && G.hover.r===r && sel;
     ctx.fillStyle = fill; rr(s.x - SEAT.w/2, s.y - SEAT.h/2, SEAT.w, SEAT.h, 9); ctx.fill();
     ctx.strokeStyle = hov ? (fit && fitCells(sel, car, c, r) ? C.good : C.bad) : "rgba(59,50,38,.3)"; ctx.lineWidth = hov ? 3 : 1.2; ctx.stroke();
     ctx.fillStyle = "rgba(59,50,38,.12)"; rr(s.x - SEAT.w/2 + 3, s.y - SEAT.h/2 + 3, 9, SEAT.h - 6, 4); ctx.fill();
-    if(isDoor(c, r, car) && !occ){ ctx.fillStyle = "rgba(59,50,38,.35)"; ctx.font = "900 7px Nunito, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("KAPI", s.x, s.y + 11); }
+    if(isDoor(c, r, car) && !occ){ ctx.fillStyle = "rgba(59,50,38,.35)"; ctx.font = "900 9px Nunito, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("KAPI", s.x, s.y + 10); }
     if(isWindow(r) && !occ){ ctx.fillStyle = "rgba(31,95,138,.35)"; ctx.fillRect(s.x - 10, r===0 ? s.y - SEAT.h/2 - 4 : s.y + SEAT.h/2 + 1, 20, 3); }
+    if(please) drawStar(s.x + 4, s.y - 2, 10, "#f2c230");
   }
   for(const p of [...new Set(car.seats.filter(Boolean))]){
     if(p === sel && G.drag && G.drag.moved) continue;
@@ -1021,14 +1088,14 @@ function reqIcon(type, x, y, sad){
 }
 function drawCarUI(car){
   if(car.state!=="idle") return;
-  const n = car.seats.filter(Boolean).length, tot = car.seats.length, bx = car.x + car.w + 10, by = car.y + CAR.h/2 - 22;
-  ctx.fillStyle = n ? C.yellow : "#e9e3d4"; rr(bx, by, 86, 44, 12); ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
-  ctx.fillStyle = C.ink; ctx.font = "900 15px DynaPuff, Nunito, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("Yolla!", bx+43, by+17);
-  ctx.font = "800 10px Nunito, sans-serif"; ctx.fillText(`${n}/${tot}`, bx+43, by+33);
+  const n = car.seats.filter(Boolean).length, tot = car.seats.length, Y = yolla(car), bx = Y.bx, by = Y.by + Y.h/2 - 22, big = Y.h > 44;
+  ctx.fillStyle = n ? C.yellow : "#e9e3d4"; rr(Y.bx, Y.by, Y.w, Y.h, 12); ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = C.ink; ctx.font = `900 ${big?19:15}px DynaPuff, Nunito, sans-serif`; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("Yolla!", bx+43, by+(big?14:17));
+  ctx.font = `800 ${big?13:10}px Nunito, sans-serif`; ctx.fillText(`${n}/${tot}`, bx+43, by+(big?36:33));
   if(car.waiting){ const fr = clamp(car.wait/G.S.wait, 0, 1), dx = car.x + car.w - 64, dy = car.y + 34;
     ctx.lineWidth = 4; ctx.strokeStyle = "rgba(255,255,255,.75)"; circ(dx, dy, 19); ctx.stroke();
     ctx.strokeStyle = fr>.5 ? C.good : fr>.25 ? C.mustard : C.bad; ctx.beginPath(); ctx.arc(dx, dy, 19, -Math.PI/2, -Math.PI/2 + fr*Math.PI*2); ctx.stroke();
-    ctx.fillStyle = fr>.25 ? C.ink : C.bad; ctx.font = "900 10px Nunito, sans-serif"; ctx.textAlign="center"; ctx.fillText(Math.ceil(car.wait)+" sn", bx+43, by+56); }
+    ctx.fillStyle = fr>.25 ? C.ink : C.bad; ctx.font = "900 10px Nunito, sans-serif"; ctx.textAlign="center"; ctx.fillText(Math.ceil(car.wait)+" sn", bx+43, Y.by+Y.h+12); }
 }
 function drawQueuePerson(p, lifted){
   const L = LOOKS2[p.look||p.type];
@@ -1057,7 +1124,7 @@ function drawRain(){
 }
 function fitCamera(){
   const narrow = VW < 760, padL = narrow ? 6 : 300, padR = 12, padT = narrow ? 100 : 66, padB = narrow ? 96 : 96;
-  const x0 = narrow ? 128 : -10, x1 = Math.max(672, CAR.x + carW(G ? G.S.cols : 4) + 110), y0 = 20, y1 = WALK_Y + 110;
+  const cw = CAR.x + carW(G ? G.S.cols : 4), x0 = narrow ? 136 : -10, x1 = narrow ? Math.max(624, cw + 100) : Math.max(672, cw + 110), y0 = narrow ? 60 : 20, y1 = WALK_Y + (narrow ? 150 : 110);
   cam.z = Math.max(.3, Math.min((VW-padL-padR)/(x1-x0), (VH-padT-padB)/(y1-y0)));
   cam.x = padL + ((VW-padL-padR) - (x1-x0)*cam.z)/2 - x0*cam.z;
   cam.y = padT + ((VH-padT-padB) - (y1-y0)*cam.z)/2 - y0*cam.z;
@@ -1108,6 +1175,7 @@ function updateHud(force){
   else chip.hidden = true;
 }
 function nextTask(){
+  if(TUTS) return tutChip();
   const full = G.cars.find(c => c.state==="idle" && c.seats.every(Boolean));
   if(full) return {icon:"bus", txt:`${LINES[full.line].name} dolu, yolla!`, urgent:true, go:()=>depart(full)};
   const hurry = G.cars.find(c => c.state==="idle" && c.waiting && c.wait < 5);
@@ -1127,6 +1195,15 @@ $("dReport").onclick = () => { audio(); if(state!=="play") return; pauseForModal
 
 function welcomeHtml(withCta=true){
   const day1 = save.day===1, touch = VW < 760 || (window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  if(day1 && withCta && !save.tut) return `<h2>${ic("bus")}Dolmuş Durağı'na hoş geldin!</h2>
+  <p class="sub">Karaköy iskelesinin önündeki durağın çığırtkanı sensin. İşin üç adımı var:</p>
+  <div class="steps">
+    <div class="step"><b>1</b>${ic("users")}<strong>Yolcuyu seç</strong><small>Kafasının üstünde gideceği hat yazar</small></div>
+    <div class="step"><b>2</b>${ic("hand")}<strong>Oturt</strong><small>Yeşil koltuğa dokun; yıldızlı koltuk isteğini karşılar</small></div>
+    <div class="step"><b>3</b>${ic("bus")}<strong>Yolla!</strong><small>Tam dolu dolmuş %25 fazla kazandırır</small></div>
+  </div>
+  <div class="tip">${ic("spark")}<span>Şoförün sabrı biterse dolmuş kendisi kalkar. İlk yolcuyu oyunda birlikte oturtacağız.</span></div>
+  <div class="actions"><button type="button" class="cta" id="bGo">Durağı aç ${ic("play")}</button></div>`;
   const news = save.day===2 ? `<div class="newb"><span class="dot" style="background:${LOOKS2.cift.shirt}"></span><div><b>Yeni yolcu: Çift</b><br><span style="font-size:13px;color:var(--muted)">${TYPES.cift.desc} Bir de yağmur bekleniyor.</span></div></div>` : "";
   return `<h2>${ic("bus")}${day1 ? "Dolmuş Durağı'na hoş geldin!" : "Gün "+save.day+" başlıyor"}</h2>
   <p class="sub">${day1 ? "Karaköy iskelesinin önündeki durağın çığırtkanı sensin. Arkadakiler biraz sıkışsın." : "Vapurlar yanaşıyor, dolmuşlar hazır."}</p>
@@ -1147,13 +1224,33 @@ function welcomeHtml(withCta=true){
   <div class="tip">${ic("spark")}<span>Valizli teyze iki koltuk kaplar: yan yana iki boş koltuk bul, kapıya yakın olsun.</span></div>
   ${withCta ? `<div class="actions"><button type="button" class="cta" id="bGo">${day1?"Durağı aç":"Sefere başla"} ${ic("play")}</button></div>` : ""}`;
 }
+// ---------- first placement, hands-on ----------
+const TUT_DONE = "Harika, ilk dolmuş yolda! Vapur yanaşınca kalabalık gelir.";
+function bestSeat(p){
+  const car = G.cars.find(c => c.line===p.line && c.state==="idle"); if(!car) return null;
+  let best = null;
+  for(let c=0;c<car.cols;c++) for(let r=0;r<3;r++){ if(!fitCells(p, car, c, r)) continue; if(wouldPlease(p, car, c, r)) return {car, c, r}; if(!best) best = {car, c, r}; }
+  return best;
+}
+function tutorialSteps(){
+  const placed = () => seatedAll().length > 0 || G.served > 0;
+  return [
+    {icon:"users", hint:"Sıradaki yolcuya dokun. Başındaki etiket <b>gideceği hattı</b> gösterir.", chip:"Sıradaki yolcuya dokun", target:() => { const p = G.queue[0]; return p ? [p.x, p.y-40] : null; },
+      done:() => !!G.sel || placed(), go:() => { if(G.queue[0]){ G.sel = G.queue[0]; sfx.pick(); } }},
+    {icon:"hand", hint:"Yeşil koltuğa dokun. <b>★ yıldızlı</b> koltuk yolcunun isteğini karşılar, bahşiş getirir.", chip:() => { const b = G.sel && bestSeat(G.sel); return b && wouldPlease(G.sel, b.car, b.c, b.r) ? "Yıldızlı koltuğa dokun" : "Yeşil koltuğa dokun"; }, target:() => { const b = G.sel && bestSeat(G.sel); if(!b) return null; const sp = seatPos(b.car, b.c, b.r); return [sp.x, sp.y]; },
+      done:placed, go:() => { const b = G.sel && bestSeat(G.sel); if(b && place(G.sel, b.car, b.c, b.r)) G.sel = null; }},
+    {icon:"bus", hint:"Dolmuşu doldurmaya devam et ya da <b>Yolla!</b> ile gönder.", chip:"Yolla! ile dolmuşu gönder", target:() => { const car = G.cars.find(c => c.state==="idle" && c.seats.some(Boolean)); if(!car) return null; const Y = yolla(car); return [Y.bx + Y.w/2, Y.by + Y.h/2]; },
+      done:() => G.served > 0, go:() => { const car = G.cars.find(c => c.state==="idle" && c.seats.some(Boolean)); if(car) depart(car); }},
+  ];
+}
+
 // ---------- mid-shift save ----------
 const SERVED_LABEL = "Taşınan";
 function clockAt(t){ const m = 7*60 + Math.floor(clamp(t/DAY_LEN,0,1)*14*60); return String(Math.floor(m/60)).padStart(2,"0")+":"+String(Math.floor(m%60/10)*10).padStart(2,"0"); }
-function snapshotShift(){ return {t:G.t, closing:G.closing, served:G.served, angry:G.angry, revenue:G.revenue, satSum:G.satSum, satN:G.satN, rainAt:G.rain.at, rainDone:G.rain.done || G.rain.on || G.t > G.rain.at}; }
+function snapshotShift(){ return {t:G.t, revenue:G.revenue, served:G.served, graph:packGraph(G, ["particles","floats","drag","hover"])}; }
 function restoreShift(z){
-  Object.assign(G, {t:z.t, closing:z.closing, served:z.served, angry:z.angry, revenue:z.revenue, satSum:z.satSum, satN:z.satN});
-  G.rain.at = z.rainAt; G.rain.done = z.rainDone;
+  G = unpackGraph(z.graph); G.particles = []; G.floats = []; G.drag = null; G.hover = null;
+  for(const p of [...G.queue, ...G.walkers, ...(G.leavers||[]), ...seatedAll()]) p.T = TYPES[p.type];
 }
 
 function endDay(){

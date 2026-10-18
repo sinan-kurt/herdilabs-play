@@ -148,6 +148,17 @@ button:focus-visible{outline:3px solid var(--mint);outline-offset:2px}
 .stat b.pop{animation:bump .4s cubic-bezier(.2,1.6,.4,1);display:inline-block}
 @media (prefers-reduced-motion:reduce){.modal-wrap:not([hidden]),.modal-wrap:not([hidden]) .modal,.pill.bump,.stat b.pop{animation:none}}
 
+.tuthint{position:absolute;left:50%;top:64px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100% - 32px);background:#fff8ec;border:2px solid #f2c230;border-radius:14px;padding:8px 14px;font-size:14px;font-weight:700;box-shadow:var(--shadow);pointer-events:none;z-index:1}
+.tuthint .i{width:18px;height:18px;color:var(--coral);flex:none}
+.tuthint small{font-weight:900;color:var(--muted);margin-right:2px}
+@media (max-width:760px){.tuthint{display:none!important}}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.step{position:relative;background:#fff;border:1.6px solid var(--line);border-radius:14px;padding:12px 10px 10px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}
+.step>b{position:absolute;top:-9px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--coral);color:#fff;font-size:12px;display:grid;place-items:center}
+.step .i{width:26px;height:26px;color:var(--coral)}
+.step strong{font-size:14px;font-weight:900}
+.step small{font-size:12px;color:var(--muted);line-height:1.35}
+
 body{background:#cfe4ea}
 :root{--coral:#c9541c;--orange:#d9822b}
 .brand{background:#a8401a}
@@ -443,7 +454,7 @@ let autoT = 0;
 function autosave(){ if(state!=="play" || !G || typeof snapshotShift!=="function") return; persist(); try{ localStorage.setItem(SHIFT_KEY, JSON.stringify(Object.assign({day:save.day}, snapshotShift()))); }catch(e){} }
 function clearShift(){ try{ localStorage.removeItem(SHIFT_KEY); }catch(e){} }
 function savedShift(){ if(typeof restoreShift!=="function") return null; try{ const z = JSON.parse(localStorage.getItem(SHIFT_KEY)||"null"); return z && z.day===save.day ? z : null; }catch(e){ return null; } }
-function startShift(z){ audio(); $("modal").hidden = true; modalPrev = null; newDay(); if(z) restoreShift(z); state="play"; setSpeed(1); resumeSpeed=1; fitCamera(); updateHud(true); if(z) announce("Kaldığın yerden devam: "+$("hClock").textContent, "play"); }
+function startShift(z){ audio(); $("modal").hidden = true; modalPrev = null; newDay(); if(z) restoreShift(z); TUTS = null; tutEl().hidden = true; if(save.day===1 && !save.tut && typeof tutorialSteps==="function") startTutorial(tutorialSteps()); state="play"; setSpeed(1); resumeSpeed=1; fitCamera(); updateHud(true); if(z) announce("Kaldığın yerden devam: "+$("hClock").textContent, "play"); }
 function showPaused(){
   pauseForModal();
   openModal(`<h2>${ic("pause")}Mola</h2><p class="sub">Oyun duraklatıldı, ilerleme kaydedildi.</p><div class="actions"><button type="button" class="cta" id="bResume">Devam et ${ic("play")}</button></div>`);
@@ -453,7 +464,7 @@ function showWelcome(){
   const z = savedShift(); state = "menu";
   if(z){
     const hh = typeof clockAt==="function" ? ", saat "+clockAt(z.t) : "";
-    openModal(`<h2>${ic("play")}Yarım kalan gün</h2><p class="sub">Gün ${save.day}${hh}. Kazancın ve son durum kaydedildi; o an bekleyenler gitmiş olacak.</p>
+    openModal(`<h2>${ic("play")}Yarım kalan gün</h2><p class="sub">Gün ${save.day}${hh}. Her şey bıraktığın gibi duruyor.</p>
       <div class="stats"><div class="stat"><span>Bugünkü kazanç</span><b>₺${z.revenue||0}</b></div><div class="stat"><span>${typeof SERVED_LABEL!=="undefined" ? SERVED_LABEL : "Hizmet"}</span><b>${z.served||0}</b></div><div class="stat"><span>Kasa</span><b>₺${save.money}</b></div></div>
       <div class="actions"><button type="button" class="cta" id="bGo">Kaldığın yerden devam et ${ic("play")}</button></div>`, false);
     $("bGo").onclick = () => startShift(z);
@@ -472,7 +483,7 @@ let last = 0;
 function loop(ts){
   const raw = Math.min(.05, (ts-last)/1000 || 0); last = ts;
   if(state==="play" && G.speed>0){ update(raw*G.speed); updateHud(); autoT += raw; if(autoT > 4){ autoT = 0; autosave(); } }
-  render(); drawJuice(raw);
+  render(); drawJuice(raw); tutTick(); drawTutArrow();
   requestAnimationFrame(loop);
 }
 
@@ -544,6 +555,50 @@ function countUp(){
       b.textContent = pre + (dec ? v.toFixed(1).replace(".", ",") : Math.round(v)); if(k < 1) requestAnimationFrame(step); else b.classList.add("pop"); };
     b.textContent = pre + "0"; requestAnimationFrame(step);
   });
+}
+
+// ---------- hands-on first-day tutorial (games provide tutorialSteps()) ----------
+let TUTS = null;
+function startTutorial(steps){ TUTS = {steps, i:0}; showTutStep(); }
+function tutEl(){ let el = $("tutHint"); if(!el){ el = document.createElement("div"); el.id = "tutHint"; el.className = "tuthint"; el.hidden = true; $("game").appendChild(el); } return el; }
+function showTutStep(){ const st = TUTS.steps[TUTS.i], el = tutEl(); el.innerHTML = `${ic(st.icon||"hand")}<span><small>${TUTS.i+1}/${TUTS.steps.length}</small> ${st.hint}</span>`; el.hidden = false; if(typeof updateHud==="function" && G) updateHud(true); }
+function tutTick(){
+  if(!TUTS || state!=="play") return;
+  let moved = false;
+  while(TUTS && TUTS.steps[TUTS.i].done()){ TUTS.i++; moved = true;
+    if(TUTS.i >= TUTS.steps.length){ TUTS = null; tutEl().hidden = true; save.tut = 1; persist(); announce(typeof TUT_DONE!=="undefined" ? TUT_DONE : "Harika! Gerisi senin.", "spark"); }
+  }
+  if(moved){ tone(1600,.1,"sine",.07); tone(2100,.12,"sine",.06,0,.06); if(TUTS) showTutStep(); }
+}
+function tutChip(){ const st = TUTS.steps[TUTS.i]; return {icon:st.icon||"hand", txt:(typeof st.chip==="function" ? st.chip() : st.chip)||st.hint.replace(/<[^>]+>/g,""), urgent:true, go:st.go||null}; }
+function drawTutArrow(){
+  if(!TUTS || state!=="play") return; const w = TUTS.steps[TUTS.i].target && TUTS.steps[TUTS.i].target(); if(!w) return;
+  const sc = toScreen(w[0], w[1]), t = performance.now()/180, x = sc[0], y = sc[1] - 26 + Math.sin(t)*7;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = "#f2c230"; ctx.strokeStyle = "#3b3226"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(x, y+14); ctx.lineTo(x-14, y-4); ctx.lineTo(x-6, y-4); ctx.lineTo(x-6, y-22); ctx.lineTo(x+6, y-22); ctx.lineTo(x+6, y-4); ctx.lineTo(x+14, y-4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.globalAlpha = .5 + .5*Math.sin(t); ctx.strokeStyle = "#f2c230"; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(sc[0], sc[1], 24, 0, 6.3); ctx.stroke(); ctx.globalAlpha = 1;
+}
+
+// ---------- object-graph save: keeps shared references (seat <-> passenger, stall <-> customer) intact ----------
+function packGraph(root, skip){
+  const ids = new Map(), table = [];
+  const enc = v => {
+    if(typeof v === "function") return undefined;
+    if(v === null || typeof v !== "object") return (typeof v === "number" && !isFinite(v)) ? {$n:String(v)} : v;
+    if(ids.has(v)) return {$r:ids.get(v)};
+    const id = table.length; ids.set(v, id); table.push(null);
+    if(Array.isArray(v)) table[id] = {$a:v.map(x => { const e = enc(x); return e === undefined ? null : e; })};
+    else { const o = {}; for(const k in v){ if(v === root && skip && skip.includes(k)) continue; const e = enc(v[k]); if(e !== undefined) o[k] = e; } table[id] = o; }
+    return {$r:id};
+  };
+  enc(root); return table;
+}
+function unpackGraph(table){
+  const objs = table.map(t => t && t.$a ? [] : {});
+  const dec = v => (v === null || typeof v !== "object") ? v : v.$r !== undefined ? objs[v.$r] : v.$n !== undefined ? Number(v.$n) : v;
+  table.forEach((t, i) => { if(t.$a) t.$a.forEach(x => objs[i].push(dec(x))); else for(const k in t) objs[i][k] = dec(t[k]); });
+  return objs[0];
 }
 
 // ---------- characters ----------
@@ -930,7 +985,15 @@ function hitTest(wx, wy){
   } }
   return null;
 }
-function onPointerDown(wx, wy){ const h = hitTest(wx, wy); if(!h) return; goTo(h.L, h.x, h.act); }
+function onPointerDown(wx, wy){ const h = hitTest(wx, wy); if(!h) return; if(h.act && h.act.type==="seat" && redirectIfNoTea(G.seats[h.act.i])) return; goTo(h.L, h.x, h.act); }
+// tapping an order with an empty tray sends you to the right pot instead of a wasted trip
+function redirectIfNoTea(s){
+  if(!s || s.state!=="want" || s.dirty || G.pl.carry.some(c=>c.kind==="tea")) return false;
+  const ready = G.pots.find(p=>!p.locked && p.state==="tav" && p.cups>0), brewing = G.pots.find(p=>!p.locked && p.state==="brew"), empty = G.pots.find(p=>!p.locked && (p.state==="empty" || p.state==="aci"));
+  const p = ready || brewing || empty; if(!p) return false;
+  announce(ready ? "Tepside çay yok: önce demlikten doldur" : brewing ? "Tepside çay yok: çay demleniyor, ocağa in" : "Tepside çay yok: önce çay demle", "tea");
+  sfx.click(); goTo(0, p.x, {type:"pot", i:p.i}); return true;
+}
 function onPointerUp(){}
 
 // ---------- drawing ----------
@@ -1031,11 +1094,11 @@ function drawOrderIcons(){
   for(const s of G.seats){
     if(!s.open || s.state!=="want" || (s.kind==="meet" && !s.present)) continue;
     const fy = floorY(s.L), x = s.x, y = fy - 86, fr = clamp(1 - s.wait/TYPES[s.type].patience, 0, 1);
-    ctx.fillStyle = "#fff"; circ(x, y, 13); ctx.fill(); ctx.strokeStyle="rgba(59,50,38,.3)"; ctx.lineWidth=1; ctx.stroke();
-    ctx.beginPath(); ctx.arc(x, y, 13, -Math.PI/2, -Math.PI/2 + fr*6.283); ctx.strokeStyle = fr>.5 ? C.good : fr>.25 ? C.mustard : C.bad; ctx.lineWidth = 3; ctx.stroke();
+    ctx.fillStyle = "#fff"; circ(x, y, 16); ctx.fill(); ctx.strokeStyle="rgba(59,50,38,.3)"; ctx.lineWidth=1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, 16, -Math.PI/2, -Math.PI/2 + fr*6.283); ctx.strokeStyle = fr>.5 ? C.good : fr>.25 ? C.mustard : C.bad; ctx.lineWidth = 4; ctx.stroke();
     drawGlass(x, y+8, "tav", false);
     if(s.type==="patron"){ ctx.fillStyle = C.mustard; ctx.beginPath(); ctx.moveTo(x-8, y-16); ctx.lineTo(x-8, y-22); ctx.lineTo(x-4, y-18); ctx.lineTo(x, y-23); ctx.lineTo(x+4, y-18); ctx.lineTo(x+8, y-22); ctx.lineTo(x+8, y-16); ctx.closePath(); ctx.fill(); }
-    if(TYPES[s.type].fussy && s.type!=="patron"){ ctx.fillStyle = C.coral; ctx.font = "900 8px Nunito, sans-serif"; ctx.textAlign="center"; ctx.fillText("TAVINDA", x, y-19); }
+    if(TYPES[s.type].fussy && s.type!=="patron"){ ctx.font = "900 10px Nunito, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillStyle = C.coral; rr(x-27, y-31, 54, 13, 6); ctx.fill(); ctx.fillStyle = "#fff"; ctx.fillText("TAVINDA", x, y-24); }
   }
 }
 function drawMeetingRoom(fy){
@@ -1052,17 +1115,17 @@ function drawMeetingRoom(fy){
 function drawKitchen(fy){
   // counter
   ctx.fillStyle = "#a8401a"; rr(170, fy-44, 240, 8, 3); ctx.fill(); ctx.fillStyle = "#8f3517"; ctx.fillRect(174, fy-37, 232, 33);
-  ctx.fillStyle = "#f2c230"; ctx.font="900 10px Nunito, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("ÇAY OCAĞI", 290, fy-25);
+  ctx.fillStyle = "#f2c230"; ctx.font="900 10px Nunito, sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText("ÇAY OCAĞI", 290, fy-34);
   for(const p of G.pots) drawPot(p, fy);
   // sink
   ctx.fillStyle = "#cfd8dc"; rr(SINK_X-34, fy-44, 68, 8, 3); ctx.fill(); ctx.fillStyle="#b0bcc1"; ctx.fillRect(SINK_X-32, fy-37, 64, 33);
   ctx.fillStyle = "#8a969c"; ctx.fillRect(SINK_X-3, fy-62, 6, 18); ctx.fillRect(SINK_X-3, fy-62, 14, 4);
-  ctx.fillStyle = C.ink; ctx.font="800 9px Nunito, sans-serif"; ctx.fillText("EVYE", SINK_X, fy-20);
+  ctx.fillStyle = C.ink; ctx.font="900 11px Nunito, sans-serif"; ctx.fillText("EVYE", SINK_X, fy-20);
   if(upLv("makine")){ ctx.fillStyle="#e9eef0"; rr(SINK_X+38, fy-40, 24, 36, 3); ctx.fill(); ctx.strokeStyle="#9aa4ab"; ctx.lineWidth=1.5; ctx.stroke(); ctx.fillStyle="#2fa39a"; circ(SINK_X+50, fy-32, 2.5); ctx.fill(); }
   // glass rack
   ctx.fillStyle = "#c99a62"; ctx.fillRect(RACK_X-36, fy-74, 72, 5); ctx.fillRect(RACK_X-36, fy-48, 72, 5);
   for(let i=0;i<GLASSES;i++){ const row = i<6 ? 0 : 1, col = i%6, gx = RACK_X-35+col*14, gy = fy-74+row*26; if(i < G.glasses) drawGlass(gx, gy, "dirty", false); }
-  ctx.fillStyle = C.ink; ctx.font="800 9px Nunito, sans-serif"; ctx.fillText(`${G.glasses} TEMİZ`, RACK_X, fy-30);
+  ctx.fillStyle = G.glasses<=2 ? C.bad : C.ink; ctx.font="900 12px Nunito, sans-serif"; ctx.fillText(`${G.glasses} temiz`, RACK_X, fy-30);
   // tea poster
   ctx.fillStyle = "#fff8ec"; rr(IN_X0+8, fy-FH+SLAB+10, 64, 40, 4); ctx.fill(); ctx.fillStyle="#a8401a"; ctx.font="900 9px Nunito, sans-serif"; ctx.fillText("TAVŞAN", IN_X0+40, fy-FH+SLAB+24); ctx.fillText("KANI", IN_X0+40, fy-FH+SLAB+37);
 }
@@ -1082,16 +1145,23 @@ function drawPot(p, fy){
   ctx.fillStyle = "#c9541c"; ctx.beginPath(); ctx.ellipse(x, base-34, 11, 2.2, 0, 0, 6.3); ctx.fill();
   ctx.fillStyle = col; circ(x, base-43, 3); ctx.fill(); ctx.stroke();
   // status ring
-  const ry = base-56;
-  let fr = 0, colr = "#cfc6b8", label = "BOŞ";
-  if(p.state==="brew"){ fr = p.t/BREW; colr = C.mustard; label = "DEMLENİYOR"; }
-  else if(p.state==="tav"){ fr = 1 - p.t/G.S.tav; colr = C.good; label = `TAVINDA · ${p.cups}`; }
-  else if(p.state==="aci"){ fr = 1; colr = C.teaD; label = `ACI · ${p.cups}`; }
-  ctx.fillStyle = "#fff"; circ(x, ry, 9); ctx.fill();
-  ctx.beginPath(); ctx.arc(x, ry, 9, -Math.PI/2, -Math.PI/2 + fr*6.283); ctx.strokeStyle = colr; ctx.lineWidth = 3.5; ctx.stroke();
-  ctx.fillStyle = "#fff3e6"; ctx.font = "900 6.5px Nunito, sans-serif"; ctx.textAlign="center"; ctx.fillText(label, x, fy-8);
-  if(p.state==="empty" || p.state==="aci"){ ctx.fillStyle = p.state==="aci" ? C.teaD : "#9a8f80"; ctx.font="900 10px Nunito, sans-serif"; ctx.fillText(p.state==="aci" ? "↻" : "+", x, ry+1); }
-  else if(p.state==="tav"){ ctx.fillStyle = C.good; ctx.font="900 9px Nunito, sans-serif"; ctx.fillText("✓", x, ry+1); }
+  const ry = base-54;
+  let fr = 0, colr = "#b9ad9a", label = "BOŞ", pill = "#8b7b66";
+  if(p.state==="brew"){ fr = p.t/BREW; colr = C.mustard; pill = "#c48a17"; label = `${Math.ceil(BREW - p.t)} sn`; }
+  else if(p.state==="tav"){ fr = 1 - p.t/G.S.tav; colr = C.good; pill = C.good; label = `${p.cups} çay`; }
+  else if(p.state==="aci"){ fr = 1; colr = C.teaD; pill = C.teaD; label = "ACI"; }
+  ctx.fillStyle = "#fff"; circ(x, ry, 10); ctx.fill(); ctx.strokeStyle = "rgba(59,50,38,.25)"; ctx.lineWidth = 1; ctx.stroke();
+  ctx.beginPath(); ctx.arc(x, ry, 10, -Math.PI/2, -Math.PI/2 + fr*6.283); ctx.strokeStyle = colr; ctx.lineWidth = 4.5; ctx.stroke();
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+  if(p.state==="empty" || p.state==="aci"){ ctx.fillStyle = p.state==="aci" ? C.teaD : "#8b7b66"; ctx.font="900 13px Nunito, sans-serif"; ctx.fillText(p.state==="aci" ? "↻" : "+", x, ry+1); }
+  else if(p.state==="tav"){ ctx.fillStyle = C.good; ctx.font="900 12px Nunito, sans-serif"; ctx.fillText("✓", x, ry+1); }
+  else { ctx.fillStyle = C.mustard; ctx.font="900 11px Nunito, sans-serif"; ctx.fillText("~", x, ry+1); }
+  // readable status pill on the counter front, with progress fill
+  ctx.font = "900 11px Nunito, sans-serif"; const w = 44, py = fy - 21;
+  ctx.fillStyle = "rgba(255,255,255,.9)"; rr(x - w/2, py, w, 15, 7); ctx.fill();
+  if(fr > 0){ ctx.save(); rr(x - w/2, py, w, 15, 7); ctx.clip(); ctx.fillStyle = pill; ctx.globalAlpha = .28; ctx.fillRect(x - w/2, py, w*fr, 15); ctx.restore(); }
+  ctx.strokeStyle = pill; ctx.lineWidth = 1.6; rr(x - w/2, py, w, 15, 7); ctx.stroke();
+  ctx.fillStyle = pill; ctx.fillText(label, x, py + 8);
 }
 function drawShaft(){
   ctx.fillStyle = "#4a4f57"; ctx.fillRect(SHAFT_X0, ROOF_Y-12, SHAFT_X1-SHAFT_X0, floorY(0)-ROOF_Y+12);
@@ -1126,8 +1196,8 @@ function drawPlayer(){
 }
 
 function fitCamera(){
-  const narrow = VW < 760, padL = narrow ? 8 : 300, padR = 16, padT = narrow ? 100 : 70, padB = narrow ? 96 : 96;
-  const x0 = IN_X0-40, x1 = SHAFT_X1+30, y0 = ROOF_Y-40, y1 = floorY(0)+20;
+  const narrow = VW < 760, padL = narrow ? 8 : 300, padR = 16, padT = narrow ? 100 : 62, padB = narrow ? 96 : 90;
+  const x0 = IN_X0-30, x1 = SHAFT_X1+20, y0 = ROOF_Y-34, y1 = floorY(0)+10;
   cam.z = Math.max(.3, Math.min((VW-padL-padR)/(x1-x0), (VH-padT-padB)/(y1-y0)));
   cam.x = padL + ((VW-padL-padR) - (x1-x0)*cam.z)/2 - x0*cam.z;
   cam.y = padT + ((VH-padT-padB) - (y1-y0)*cam.z)/2 - y0*cam.z;
@@ -1176,6 +1246,7 @@ function updateHud(force){
   } else chip.hidden = true;
 }
 function nextTask(){
+  if(TUTS) return tutChip();
   const pl = G.pl, teas = pl.carry.filter(c=>c.kind==="tea").length, dirty = pl.carry.filter(c=>c.kind==="dirty").length, os = orders();
   const potReady = G.pots.find(p=>!p.locked && p.state==="tav" && p.cups>0), potBad = G.pots.find(p=>!p.locked && (p.state==="empty" || p.state==="aci"));
   const fillMore = pl.L===0 && !pl.ride && potReady && G.glasses>0 && pl.carry.length < G.S.tray && teas < os.length;
@@ -1196,7 +1267,7 @@ function nextTask(){
   if(dirty) return wash;
   return {icon:"hand", txt:"Her şey yolunda", urgent:false, go:null};
 }
-$("oList").addEventListener("click", e => { const b = e.target.closest("[data-i]"); if(!b || state!=="play") return; audio(); const s = G.seats[+b.dataset.i]; goTo(s.L, s.x, {type:"seat", i:s.i}); });
+$("oList").addEventListener("click", e => { const b = e.target.closest("[data-i]"); if(!b || state!=="play") return; audio(); const s = G.seats[+b.dataset.i]; if(redirectIfNoTea(s)) return; goTo(s.L, s.x, {type:"seat", i:s.i}); });
 $("dTasks").onclick = () => { const h = !$("side").hidden; $("side").hidden = h; $("dTasks").classList.toggle("on", !h); };
 $("dCodex").onclick = () => { audio(); if(state!=="play") return; pauseForModal();
   openModal(`<h2>${ic("users")}Ofistekiler</h2><p class="sub">Kimin nasıl çay içtiğini bil, bahşişi kap.</p><div class="codex">${Object.entries(TYPES).map(([k,t]) => `<div class="ct"><span class="dot" style="background:${LOOKS2[k].shirt}"></span><div><strong>${t.name}</strong><p>${t.desc}</p></div></div>`).join("")}</div>`); };
@@ -1206,6 +1277,15 @@ $("dReport").onclick = () => { audio(); if(state!=="play") return; pauseForModal
 
 function welcomeHtml(withCta=true){
   const day1 = save.day===1, touch = VW < 760 || (window.matchMedia && matchMedia("(pointer: coarse)").matches);
+  if(day1 && withCta && !save.tut) return `<h2>${ic("tea")}Çay Ocağı'na hoş geldin!</h2>
+  <p class="sub">Levent Plaza'nın bodrumundaki çay ocağı senin. İşin üç adımı var:</p>
+  <div class="steps">
+    <div class="step"><b>1</b>${ic("tea")}<strong>Demle</strong><small>Demliğe dokun, 7 saniye bekle</small></div>
+    <div class="step"><b>2</b>${ic("hand")}<strong>Doldur</strong><small>Hazır demliğe dokun, tepsiye al</small></div>
+    <div class="step"><b>3</b>${ic("users")}<strong>Servis et</strong><small>Siparişe dokun, asansörle çıkar</small></div>
+  </div>
+  <div class="tip">${ic("spark")}<span>Çay soğumadan ve acılaşmadan yetişirse bahşiş gelir. İlk servisi oyunda birlikte yapacağız.</span></div>
+  <div class="actions"><button type="button" class="cta" id="bGo">Ocağı yak ${ic("play")}</button></div>`;
   const news = save.day===2 ? `<div class="newb"><span class="dot" style="background:${LOOKS2.muhasebeci.shirt}"></span><div><b>Yeni: 3. kata bir şirket taşındı</b><br><span style="font-size:13px;color:var(--muted)">Üç masa daha, iki toplantı, bir de elektrik kesintisi riski.</span></div></div>`
     : save.day===3 ? `<div class="newb"><span class="dot" style="background:${LOOKS2.patron.shirt}"></span><div><b>Yeni: Patron 5. katta</b><br><span style="font-size:13px;color:var(--muted)">${TYPES.patron.desc}</span></div></div>` : "";
   return `<h2>${ic("tea")}${day1 ? "Çay Ocağı'na hoş geldin!" : "Gün "+save.day+" başlıyor"}</h2>
@@ -1236,20 +1316,27 @@ function endDay(){
   endSequence("Mesai bitti!", `Gün ${finished} · ${G.served} çay · ₺${G.revenue}`, "#c94f3a", r);
 }
 
+// ---------- first serve, hands-on ----------
+const TUT_DONE = "Harika, ilk çay teslim! Boş bardakları evyede yıkamayı unutma.";
+function tutorialSteps(){
+  const pot = () => G.pots.find(p=>!p.locked && p.state!=="empty") || G.pots[0];
+  const order = () => G.seats.find(s=>s.open && s.state==="want" && s.kind!=="meet");
+  return [
+    {icon:"tea", hint:"Demliğe dokun: <b>çay demle</b>.", chip:"Demliğe dokun, çay demle", target:() => [G.pots[0].x, floorY(0)-98], done:() => G.pots.some(p=>p.state!=="empty"), go:() => goTo(0, G.pots[0].x, {type:"pot", i:0})},
+    {icon:"tea", hint:"Çay demleniyor. Sayaç dolunca <b>tavında</b> olacak.", chip:"Çayın demlenmesini bekle", target:() => [pot().x, floorY(0)-98], done:() => G.pots.some(p=>p.state==="tav") || G.pl.carry.some(c=>c.kind==="tea")},
+    {icon:"hand", hint:"Hazır demliğe dokun: <b>tepsiye doldur</b>.", chip:"Demliğe dokun, tepsiye doldur", target:() => { const p = G.pots.find(p=>p.state==="tav"); return p ? [p.x, floorY(0)-98] : null; }, done:() => G.pl.carry.some(c=>c.kind==="tea"),
+      go:() => { const p = G.pots.find(p=>p.state==="tav"); if(p) goTo(0, p.x, {type:"pot", i:p.i}); }},
+    {icon:"users", hint:"Siparişe dokun: çaycı <b>asansörle çıkıp</b> çayı verir.", chip:"Siparişe dokun, çayı götür", target:() => { const o = order(); return o ? [o.x, floorY(o.L)-86] : null; }, done:() => G.served > 0,
+      go:() => { const o = order(); if(o) goTo(o.L, o.x, {type:"seat", i:o.i}); }},
+  ];
+}
+
 // ---------- mid-shift save ----------
 const SERVED_LABEL = "Servis";
 function clockAt(t){ const m = 9*60 + Math.floor(clamp(t/DAY_LEN,0,1)*9*60); return String(Math.floor(m/60)).padStart(2,"0")+":"+String(Math.floor(m%60/10)*10).padStart(2,"0"); }
-function snapshotShift(){
-  return {t:G.t, closing:G.closing, served:G.served, angry:G.angry, revenue:G.revenue, satSum:G.satSum, satN:G.satN,
-    pots:G.pots.map(p => ({state:p.state, t:p.t, cups:p.cups})), dirty:G.seats.filter(s=>s.dirty).map(s=>s.i),
-    powerAt:G.power.at, powerDone:G.power.done || G.power.off || G.t > G.power.at};
-}
+function snapshotShift(){ return {t:G.t, revenue:G.revenue, served:G.served, graph:packGraph(G, ["particles","floats","drag","hover"])}; }
 function restoreShift(z){
-  Object.assign(G, {t:z.t, closing:z.closing, served:z.served, angry:z.angry, revenue:z.revenue, satSum:z.satSum, satN:z.satN});
-  z.pots.forEach((v,i) => { if(G.pots[i] && !G.pots[i].locked) Object.assign(G.pots[i], v); });
-  z.dirty.forEach(i => { if(G.seats[i]) G.seats[i].dirty = true; });
-  G.glasses = Math.max(0, GLASSES - z.dirty.length);
-  G.power.at = z.powerAt; G.power.done = z.powerDone;
+  G = unpackGraph(z.graph); G.particles = []; G.floats = []; G.drag = null; G.hover = null;
 }
 
 // attract scene
