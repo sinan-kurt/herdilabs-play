@@ -151,7 +151,7 @@ button:focus-visible{outline:3px solid var(--mint);outline-offset:2px}
 .tuthint{position:absolute;left:50%;top:64px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100% - 32px);background:#fff8ec;border:2px solid #f2c230;border-radius:14px;padding:8px 14px;font-size:14px;font-weight:700;box-shadow:var(--shadow);pointer-events:none;z-index:1}
 .tuthint .i{width:18px;height:18px;color:var(--coral);flex:none}
 .tuthint small{font-weight:900;color:var(--muted);margin-right:2px}
-@media (max-width:760px){.tuthint{display:none!important}}
+@media (max-width:760px){.tuthint{top:124px;font-size:12.5px;padding:6px 12px;white-space:nowrap;max-width:calc(100% - 20px)}.tuthint span{overflow:hidden;text-overflow:ellipsis;min-width:0}}
 .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .step{position:relative;background:#fff;border:1.6px solid var(--line);border-radius:14px;padding:12px 10px 10px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}
 .step>b{position:absolute;top:-9px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--coral);color:#fff;font-size:12px;display:grid;place-items:center}
@@ -175,6 +175,19 @@ body{background:#cfe4ea}
 .ord span{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .ord .bar{width:46px;height:6px;border-radius:9px;background:#efe3cf;overflow:hidden;flex:none}
 .ord .bar i{display:block;height:100%}
+@media (max-width:760px){
+  .side{left:8px;right:8px;width:auto;bottom:92px;max-height:none;overflow:visible;display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .side .panel{padding:6px 9px;border-radius:12px;font-size:12.5px}
+  .side .panel:first-child{grid-column:1/-1}
+  .side .panel h3{margin:0 0 5px;font-size:13px}
+  #oList{flex-direction:row;overflow-x:auto;gap:6px;scrollbar-width:none;padding-bottom:1px}
+  #oList::-webkit-scrollbar{display:none}
+  #oList .ord{width:auto;flex:none;padding:5px 8px;font-size:12px;gap:6px}
+  #oList .ord span{overflow:visible}
+  #oList .ord .bar{width:28px}
+  #oList .idle{white-space:nowrap;margin:2px}
+  .tray i{width:11px;height:14px}
+}
 .tray{display:flex;gap:4px;margin-left:auto}
 .tray i{width:14px;height:18px;border-radius:3px 3px 6px 6px;border:2px solid var(--ink);background:#fff}
 .tray i.tav{background:#b8471a}.tray i.aci{background:#4a1f10}.tray i.cold{background:#c99a6a}.tray i.dirty{background:#e7e0d4;border-style:dashed}.tray i.e{border-color:#d9cbb2;background:transparent}
@@ -557,16 +570,19 @@ function countUp(){
   });
 }
 
+// phones: reserve room so the opened side panel / tutorial bar never covers the play area
+function sidePad(){ const sd = $("side"); return VW < 760 && sd && !sd.hidden ? sd.offsetHeight + 8 : 0; }
+function tutPad(){ return VW < 760 && TUTS ? 40 : 0; }
 // ---------- hands-on first-day tutorial (games provide tutorialSteps()) ----------
 let TUTS = null;
 function startTutorial(steps){ TUTS = {steps, i:0}; showTutStep(); }
 function tutEl(){ let el = $("tutHint"); if(!el){ el = document.createElement("div"); el.id = "tutHint"; el.className = "tuthint"; el.hidden = true; $("game").appendChild(el); } return el; }
-function showTutStep(){ const st = TUTS.steps[TUTS.i], el = tutEl(); el.innerHTML = `${ic(st.icon||"hand")}<span><small>${TUTS.i+1}/${TUTS.steps.length}</small> ${st.hint}</span>`; el.hidden = false; if(typeof updateHud==="function" && G) updateHud(true); }
+function showTutStep(){ const st = TUTS.steps[TUTS.i], el = tutEl(), narrow = VW < 760, txt = narrow ? ((typeof st.chip==="function" ? st.chip() : st.chip) || st.hint) : st.hint; el.innerHTML = `${ic(st.icon||"hand")}<span><small>${TUTS.i+1}/${TUTS.steps.length}</small> ${txt}</span>`; const was = el.hidden; el.hidden = false; if(was) resize(); if(typeof updateHud==="function" && G) updateHud(true); }
 function tutTick(){
   if(!TUTS || state!=="play") return;
   let moved = false;
   while(TUTS && TUTS.steps[TUTS.i].done()){ TUTS.i++; moved = true;
-    if(TUTS.i >= TUTS.steps.length){ TUTS = null; tutEl().hidden = true; save.tut = 1; persist(); announce(typeof TUT_DONE!=="undefined" ? TUT_DONE : "Harika! Gerisi senin.", "spark"); }
+    if(TUTS.i >= TUTS.steps.length){ TUTS = null; tutEl().hidden = true; save.tut = 1; persist(); resize(); announce(typeof TUT_DONE!=="undefined" ? TUT_DONE : "Harika! Gerisi senin.", "spark"); }
   }
   if(moved){ tone(1600,.1,"sine",.07); tone(2100,.12,"sine",.06,0,.06); if(TUTS) showTutStep(); }
 }
@@ -1196,7 +1212,7 @@ function drawPlayer(){
 }
 
 function fitCamera(){
-  const narrow = VW < 760, padL = narrow ? 8 : 300, padR = 16, padT = narrow ? 100 : 62, padB = narrow ? 96 : 90;
+  const narrow = VW < 760, padL = narrow ? 8 : 300, padR = 16, padT = (narrow ? 100 : 62) + tutPad(), padB = narrow ? Math.max(96, sidePad() + 92) : 90;
   const x0 = IN_X0-30, x1 = SHAFT_X1+20, y0 = ROOF_Y-34, y1 = floorY(0)+10;
   cam.z = Math.max(.3, Math.min((VW-padL-padR)/(x1-x0), (VH-padT-padB)/(y1-y0)));
   cam.x = padL + ((VW-padL-padR) - (x1-x0)*cam.z)/2 - x0*cam.z;
@@ -1268,7 +1284,7 @@ function nextTask(){
   return {icon:"hand", txt:"Her şey yolunda", urgent:false, go:null};
 }
 $("oList").addEventListener("click", e => { const b = e.target.closest("[data-i]"); if(!b || state!=="play") return; audio(); const s = G.seats[+b.dataset.i]; if(redirectIfNoTea(s)) return; goTo(s.L, s.x, {type:"seat", i:s.i}); });
-$("dTasks").onclick = () => { const h = !$("side").hidden; $("side").hidden = h; $("dTasks").classList.toggle("on", !h); };
+$("dTasks").onclick = () => { const h = !$("side").hidden; $("side").hidden = h; $("dTasks").classList.toggle("on", !h); resize(); };
 $("dCodex").onclick = () => { audio(); if(state!=="play") return; pauseForModal();
   openModal(`<h2>${ic("users")}Ofistekiler</h2><p class="sub">Kimin nasıl çay içtiğini bil, bahşişi kap.</p><div class="codex">${Object.entries(TYPES).map(([k,t]) => `<div class="ct"><span class="dot" style="background:${LOOKS2[k].shirt}"></span><div><strong>${t.name}</strong><p>${t.desc}</p></div></div>`).join("")}</div>`); };
 function statsHtml(){ const rating = G.satN ? G.satSum/G.satN/20 : 0;
