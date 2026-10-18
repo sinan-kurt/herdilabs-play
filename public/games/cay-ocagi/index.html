@@ -407,9 +407,10 @@ function openModal(html, closable=true){
   if(closable) $("mX").onclick = closeModal;
   const f = $("modalCard").querySelector(".cta") || $("modalCard").querySelector(".x"); if(f) f.focus({preventScroll:true});
 }
-function closeModal(){ $("modal").hidden = true; if(state==="play" && G.speed===0 && resumeSpeed) setSpeed(resumeSpeed); }
+let modalPrev = null;
+function closeModal(){ $("modal").hidden = true; if(state==="play" && modalPrev!==null){ setSpeed(modalPrev); modalPrev = null; } }
 $("modal").addEventListener("click", e => { if(e.target===$("modal") && modalClosable) closeModal(); });
-function pauseForModal(){ if(state==="play"){ if(G.speed) resumeSpeed = G.speed; setSpeed(0); } }
+function pauseForModal(){ if(state==="play"){ if(modalPrev===null) modalPrev = G.speed; if(G.speed) resumeSpeed = G.speed; setSpeed(0); } }
 function setSpeed(s){ if(!G) return; G.speed = s; document.querySelectorAll(".speed button").forEach(b => b.classList.toggle("on", +b.dataset.speed===s)); }
 document.querySelectorAll(".speed button").forEach(b => b.onclick = () => { audio(); if(state==="play"){ const s=+b.dataset.speed; setSpeed(s); if(s) resumeSpeed = s; } });
 function starsHtml(r){ let h=""; for(let i=1;i<=5;i++) h += r>=i-.25 ? "★" : `<span class="off">★</span>`; return h; }
@@ -432,23 +433,45 @@ function showSettings(){
   <div class="actions" style="justify-content:flex-start"><button type="button" class="ghost" id="bMusic">Müzik: ${musicOn?"açık":"kapalı"}</button><button type="button" class="ghost" id="bHelp">Nasıl oynanır?</button><button type="button" class="ghost" id="bReset">İlerlemeyi sıfırla</button></div>
   <div id="rc" hidden style="font-size:14px;margin-top:10px">Tüm para ve yükseltmeler silinecek.<div class="actions" style="justify-content:flex-start"><button type="button" class="cta" id="bResetYes">Evet, sıfırla</button></div></div>`);
   $("bReset").onclick = () => { $("rc").hidden = false; };
-  $("bResetYes").onclick = () => { save = defaultSave(); persist(); newDay(); showWelcome(); };
+  $("bResetYes").onclick = () => { save = defaultSave(); persist(); clearShift(); newDay(); showWelcome(); };
   $("bHelp").onclick = () => openModal(welcomeHtml(false));
   $("bMusic").onclick = () => { musicOn = !musicOn; try{ localStorage.setItem(SAVE_KEY+"_music", musicOn?"1":"0"); }catch(e){} if(musicOn) audio(); else stopMusic(); $("bMusic").textContent = "Müzik: "+(musicOn?"açık":"kapalı"); };
 }
+// mid-shift autosave: games may define snapshotShift() / restoreShift(z) / clockAt(t)
+const SHIFT_KEY = SAVE_KEY + "_shift";
+let autoT = 0;
+function autosave(){ if(state!=="play" || !G || typeof snapshotShift!=="function") return; persist(); try{ localStorage.setItem(SHIFT_KEY, JSON.stringify(Object.assign({day:save.day}, snapshotShift()))); }catch(e){} }
+function clearShift(){ try{ localStorage.removeItem(SHIFT_KEY); }catch(e){} }
+function savedShift(){ if(typeof restoreShift!=="function") return null; try{ const z = JSON.parse(localStorage.getItem(SHIFT_KEY)||"null"); return z && z.day===save.day ? z : null; }catch(e){ return null; } }
+function startShift(z){ audio(); $("modal").hidden = true; modalPrev = null; newDay(); if(z) restoreShift(z); state="play"; setSpeed(1); resumeSpeed=1; fitCamera(); updateHud(true); if(z) announce("Kaldığın yerden devam: "+$("hClock").textContent, "play"); }
+function showPaused(){
+  pauseForModal();
+  openModal(`<h2>${ic("pause")}Mola</h2><p class="sub">Oyun duraklatıldı, ilerleme kaydedildi.</p><div class="actions"><button type="button" class="cta" id="bResume">Devam et ${ic("play")}</button></div>`);
+  $("bResume").onclick = () => { if(modalPrev===0) modalPrev = resumeSpeed || 1; closeModal(); };
+}
 function showWelcome(){
-  state = "menu"; openModal(welcomeHtml(), false);
-  $("bGo").onclick = () => { audio(); $("modal").hidden = true; newDay(); state="play"; setSpeed(1); resumeSpeed=1; fitCamera(); updateHud(true); };
+  const z = savedShift(); state = "menu";
+  if(z){
+    const hh = typeof clockAt==="function" ? ", saat "+clockAt(z.t) : "";
+    openModal(`<h2>${ic("play")}Yarım kalan gün</h2><p class="sub">Gün ${save.day}${hh}. Kazancın ve son durum kaydedildi; o an bekleyenler gitmiş olacak.</p>
+      <div class="stats"><div class="stat"><span>Bugünkü kazanç</span><b>₺${z.revenue||0}</b></div><div class="stat"><span>${typeof SERVED_LABEL!=="undefined" ? SERVED_LABEL : "Hizmet"}</span><b>${z.served||0}</b></div><div class="stat"><span>Kasa</span><b>₺${save.money}</b></div></div>
+      <div class="actions"><button type="button" class="cta" id="bGo">Kaldığın yerden devam et ${ic("play")}</button></div>`, false);
+    $("bGo").onclick = () => startShift(z);
+    return;
+  }
+  openModal(welcomeHtml(), false);
+  $("bGo").onclick = () => startShift(null);
 }
 $("dShop").onclick = () => { audio(); if(state==="play") showShop(); };
 $("dSettings").onclick = () => { audio(); if(state==="play") showSettings(); };
 $("dSound").onclick = () => { soundOn = !soundOn; if(!soundOn) stopMusic(); audio(); $("sndIcon").innerHTML = `<use href="#i-${soundOn?"vol":"mute"}"/>`; $("sndLbl").textContent = soundOn ? "Ses" : "Sessiz"; };
-document.addEventListener("visibilitychange", () => { if(document.hidden){ stopMusic(); if(state==="play" && G.speed){ resumeSpeed = G.speed; setSpeed(0); } } else if(actx && actx.state==="running" && soundOn && musicOn) startMusic(); });
+addEventListener("pagehide", () => autosave());
+document.addEventListener("visibilitychange", () => { if(document.hidden){ stopMusic(); autosave(); if(state==="play" && G.speed && !modalOpen()){ modalPrev = G.speed; resumeSpeed = G.speed; setSpeed(0); showPaused(); } } else if(actx && actx.state==="running" && soundOn && musicOn) startMusic(); });
 
 let last = 0;
 function loop(ts){
   const raw = Math.min(.05, (ts-last)/1000 || 0); last = ts;
-  if(state==="play" && G.speed>0){ update(raw*G.speed); updateHud(); }
+  if(state==="play" && G.speed>0){ update(raw*G.speed); updateHud(); autoT += raw; if(autoT > 4){ autoT = 0; autosave(); } }
   render(); drawJuice(raw);
   requestAnimationFrame(loop);
 }
@@ -507,7 +530,7 @@ function drawJuice(dt){
 }
 // end-of-day: freeze the scene, stamp + confetti, then open the summary with counting numbers
 function endSequence(txt, sub, col, done){
-  state = "end"; setSpeed(0); J.tension = 0; J.coins.forEach(c => c.done = true); J.coins = [];
+  state = "end"; setSpeed(0); J.tension = 0; if(typeof clearShift==="function") clearShift(); J.coins.forEach(c => c.done = true); J.coins = [];
   const cols = ["#e2694f","#f2c230","#4fb08f","#2fa39a","#7b4fa0","#fff8ec"];
   const conf = Array.from({length:70}, () => ({x:VW/2 + rand(-60,60), y:VH*.42, vx:rand(-340,340), vy:rand(-520,-160), r:rand(0,6), vr:rand(-8,8), c:pick(cols)}));
   J.stamp = {txt, sub, col, t:0, dur:1.7, conf, done:() => { done(); countUp(); }};
@@ -1211,6 +1234,22 @@ function endDay(){
   const finished = save.day; save.day++; persist();
   const r = () => { openModal(`<h2>${ic("sun")}Gün ${finished} bitti</h2><p class="sub">${quip}</p>${statsHtml()}<div class="box" style="background:transparent;border:0;padding:0"><h4>${ic("spark")}Geliştir · Kasa ₺${save.money}</h4></div>${upgradesHtml()}<div class="actions"><button type="button" class="cta" id="bNext">Gün ${save.day}'e geç ${ic("play")}</button></div>`, false); wireUpgrades(r); $("bNext").onclick = () => showWelcome(); };
   endSequence("Mesai bitti!", `Gün ${finished} · ${G.served} çay · ₺${G.revenue}`, "#c94f3a", r);
+}
+
+// ---------- mid-shift save ----------
+const SERVED_LABEL = "Servis";
+function clockAt(t){ const m = 9*60 + Math.floor(clamp(t/DAY_LEN,0,1)*9*60); return String(Math.floor(m/60)).padStart(2,"0")+":"+String(Math.floor(m%60/10)*10).padStart(2,"0"); }
+function snapshotShift(){
+  return {t:G.t, closing:G.closing, served:G.served, angry:G.angry, revenue:G.revenue, satSum:G.satSum, satN:G.satN,
+    pots:G.pots.map(p => ({state:p.state, t:p.t, cups:p.cups})), dirty:G.seats.filter(s=>s.dirty).map(s=>s.i),
+    powerAt:G.power.at, powerDone:G.power.done || G.power.off || G.t > G.power.at};
+}
+function restoreShift(z){
+  Object.assign(G, {t:z.t, closing:z.closing, served:z.served, angry:z.angry, revenue:z.revenue, satSum:z.satSum, satN:z.satN});
+  z.pots.forEach((v,i) => { if(G.pots[i] && !G.pots[i].locked) Object.assign(G.pots[i], v); });
+  z.dirty.forEach(i => { if(G.seats[i]) G.seats[i].dirty = true; });
+  G.glasses = Math.max(0, GLASSES - z.dirty.length);
+  G.power.at = z.powerAt; G.power.done = z.powerDone;
 }
 
 // attract scene

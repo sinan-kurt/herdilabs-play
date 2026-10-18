@@ -60,6 +60,7 @@ svg.i{width:16px;height:16px;flex:none;fill:none;stroke:currentColor;stroke-widt
 .task .i{color:var(--muted)}
 .task.urgent{border-color:#f0b4a7;background:#fff4f1}
 .task.urgent .i{color:var(--bad)}
+.task.busy{opacity:.55;background:#f7f1e6;border-style:dashed}
 .task span{min-width:0;flex:1}
 .q{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;padding:3px 2px}
 .q .dot{width:14px;height:14px;border-radius:50%;border:2px solid var(--ink);flex:none}
@@ -124,6 +125,19 @@ button:focus-visible{outline:3px solid var(--mint);outline-offset:2px}
 #toast.out{opacity:0;transform:translate(-50%,-8px)}
 @media (max-width:760px){#toast{top:150px;font-size:12.5px}}
 .nexttask{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(88px + env(safe-area-inset-bottom,0px));display:flex;align-items:center;gap:8px;max-width:calc(100% - 32px);font:inherit;font-size:14px;font-weight:900;color:var(--ink);background:#fff;border:1.6px solid var(--line);border-radius:999px;padding:9px 16px 9px 12px;box-shadow:var(--shadow);cursor:pointer;white-space:nowrap}
+.tuthint{position:absolute;left:50%;top:64px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;max-width:calc(100% - 32px);background:#fff8ec;border:2px solid #f2c230;border-radius:14px;padding:8px 14px;font-size:14px;font-weight:700;box-shadow:var(--shadow);pointer-events:none;z-index:1}
+.tuthint .i{width:18px;height:18px;color:var(--coral)}
+@media (max-width:760px){.tuthint{top:112px;font-size:13px}}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.step{position:relative;background:#fff;border:1.6px solid var(--line);border-radius:14px;padding:12px 10px 10px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:4px}
+.step>b{position:absolute;top:-9px;left:-6px;width:22px;height:22px;border-radius:50%;background:var(--coral);color:#fff;font-size:12px;display:grid;place-items:center}
+.step .i{width:26px;height:26px;color:var(--coral)}
+.step strong{font-size:14px;font-weight:900}
+.step small{font-size:12px;color:var(--muted);line-height:1.35}
+.ministat{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(136px + env(safe-area-inset-bottom,0px));display:flex;gap:6px;pointer-events:none}
+.ministat>span{display:flex;align-items:center;gap:5px;background:var(--cream-a);border:1.6px solid var(--line);border-radius:999px;padding:4px 10px;font-size:12.5px;font-weight:800;box-shadow:var(--shadow);white-space:nowrap}
+.ministat .i{width:14px;height:14px;color:var(--coral)}
+.ministat .warn{background:#fff4f1;border-color:#f0b4a7;color:var(--bad)}
 .nexttask span{overflow:hidden;text-overflow:ellipsis;min-width:0}
 .nexttask small{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:900}
 .nexttask .i{width:18px;height:18px;color:var(--coral)}
@@ -212,6 +226,8 @@ button:focus-visible{outline:3px solid var(--mint);outline-offset:2px}
   </aside>
 
   <div id="toast" hidden></div>
+  <div id="tutHint" class="tuthint" hidden></div>
+  <div class="ministat" id="miniStat" hidden><span><svg class="i"><use href="#i-door"/></svg>Kuyruk <b id="mQ">0</b></span><span><svg class="i"><use href="#i-cart"/></svg>Sepet <b id="mC">0/3</b></span><span id="mHint" hidden></span></div>
   <button type="button" class="nexttask" id="nextTask" hidden></button>
 
   <nav class="dock" aria-label="Oyun menüsü">
@@ -515,7 +531,7 @@ function leaveAngry(c, msg){
 function finishVisit(c){
   const fee = c.T.fee, sat = clamp(c.sat,0,100), tip = sat>70 ? Math.round((sat-70)/30*5) : 0;
   const pay = sat<25 ? Math.ceil(fee/2) : fee+tip;
-  save.money += pay; G.revenue += pay; G.served++; G.satSum += sat; G.satN++;
+  save.money += pay; G.revenue += pay; G.served++; if(sat>=60) G.happy = (G.happy||0) + 1; G.satSum += sat; G.satN++;
   floatText(c.x, c.y, 60, "+₺"+pay, sat>=60?C.good:C.orange, true); sfx.coin(); { const sc = toScreen(c.x, c.y, 50); payFx(sc[0], sc[1], pay); }
   if(sat>=90 && Math.random()<.6) say(c, pick(["Pırıl pırıl!","5 yıldız veriyorum.","Burası bir sanat eseri."]));
   else if(sat<40) say(c, pick(["Bir daha mı? Asla.","Yorum yazacağım, haberin olsun.","Hijyen nerede hijyen?"]));
@@ -638,7 +654,7 @@ function updatePlayer(dt){
     p.amt -= S.mop*dt; pl.mopping = true;
     if(Math.random()<dt*14) bubbles(p.x,p.y,2);
     if(Math.random()<dt*9) sfx.scrub();
-    if(p.amt<=0){ sparkle(p.x,p.y); sfx.sparkle(); }
+    if(p.amt<=0){ sparkle(p.x,p.y); sfx.sparkle(); if(G.tut && G.tut.step===3) tutNext(); }
   }
   G.puddles = G.puddles.filter(p=>p.amt>0);
 
@@ -665,14 +681,15 @@ function updatePlayer(dt){
     if(Math.floor(w.t*5)!==Math.floor((w.t-dt)*5)){ sfx.plunge(); burst(r.cx, 50, 20, 3, C.water, 40, .4, 4); }
     if(w.t>=w.total){ r.clog=false; sfx.plop(); G.shake=.25; burst(r.cx,50,22,14,C.water,110,.7,5); floatText(r.cx, 60, 70, "PLOP!", C.orange, true); pl.work=null; }
   } else if(w.type==="refill"){
-    if(w.t>=w.total){ if(t.kind==="stall") r.paper++; else r.soap=Math.min(4,r.soap+2); pl.carry--; sfx.pick(); floatText(w.x,w.y,70, t.kind==="stall"?"+1 rulo":"+sabun", C.ink); pl.work=null; }
+    if(w.t>=w.total){ if(t.kind==="stall") r.paper++; else r.soap=Math.min(4,r.soap+2); pl.carry--; sfx.pick(); floatText(w.x,w.y,70, t.kind==="stall"?"+1 rulo":"+sabun", C.ink); pl.work=null; if(G.tut && G.tut.step===2) tutNext(); }
   } else if(w.type==="pick"){
-    if(w.t>=w.total){ pl.carry=S.carry; sfx.pick(); floatText(w.x,w.y,60,"Sepet "+pl.carry+"/"+S.carry, C.ink); pl.work=null; pl.target=null; }
+    if(w.t>=w.total){ pl.carry=S.carry; sfx.pick(); floatText(w.x,w.y,60,"Sepet "+pl.carry+"/"+S.carry, C.ink); pl.work=null; pl.target=null; if(G.tut && G.tut.step===1) tutNext(); }
   }
 }
 
 function update(dt){
   G.t += dt;
+  autoT += dt; if(autoT > 4){ autoT = 0; autosave(); }
   { let m = 1; for(const c of G.customers) if(c.state==="queue" && c.maxPat) m = Math.min(m, c.patience/c.maxPat); tension(m, dt); }
   if(G.player.nagT>0) G.player.nagT -= dt;
   if(G.marker){ G.marker.t -= dt; if(G.marker.t<=0) G.marker=null; }
@@ -869,8 +886,8 @@ function queueWave(){
   for(let i=0;i<n;i++) G.train.spawnQ.push({t:.7 + i*.45, x:pick(doors)+rand(-8,8)});
 }
 let toastT = null;
-function announce(txt){
-  const el = $("toast"); el.innerHTML = `${ic("train")}<span>${txt}</span>`; el.hidden = false; el.classList.remove("out");
+function announce(txt, icon){
+  const el = $("toast"); el.innerHTML = `${ic(icon||"train")}<span>${txt}</span>`; el.hidden = false; el.classList.remove("out");
   clearTimeout(toastT); toastT = setTimeout(()=>{ el.classList.add("out"); toastT = setTimeout(()=>{ el.hidden = true; }, 400); }, 3200);
 }
 function faceText(x,y,z,txt,font,col,side){ const p=P(x,y,z); ctx.save(); if(side) ctx.transform(K,-K*.5,0,K,p[0],p[1]); else ctx.transform(K,K*.5,0,K,p[0],p[1]); ctx.font=font; ctx.fillStyle=col; ctx.textAlign="center"; ctx.textBaseline="middle"; ctx.fillText(txt,0,0); ctx.restore(); }
@@ -1375,30 +1392,37 @@ function updateHud(force){
     : `<p class="idle">${G.closing ? "Dükkan kapandı, son müşteriler çıkıyor." : "Kapı sakin... bir paspas sallayalım."}</p>`;
   if(qh!==lastQueue){ $("qList").innerHTML = qh; lastQueue = qh; }
   const tasks = [];
-  G.stalls.forEach(s => { if(s.locked) return; const n = "Kabin "+(s.i+1);
-    if(s.clog) tasks.push({u:1, icon:"alert", txt:n+": tıkalı, pompala", t:"s"+s.i});
-    else if(s.dirt>.3) tasks.push({u:s.dirt>.6?1:0, icon:"brush", txt:n+": kirli (%"+Math.round(s.dirt*100)+")", t:"s"+s.i});
-    if(s.paper===0) tasks.push({u:1, icon:"roll", txt:n+": kağıt bitti", t:"s"+s.i}); else if(s.paper===1) tasks.push({u:0, icon:"roll", txt:n+": kağıt azaldı", t:"s"+s.i}); });
-  G.sinks.forEach(k => { const n = "Lavabo "+(k.i+1);
-    if(k.dirt>.3) tasks.push({u:0, icon:"brush", txt:n+": ovulmalı", t:"k"+k.i});
-    if(k.soap===0) tasks.push({u:1, icon:"drop", txt:n+": sabun bitti", t:"k"+k.i}); });
+  const noStock = G.player.carry===0;
+  G.stalls.forEach(s => { if(s.locked) return; const n = "Kabin "+(s.i+1), busy = !!s.occ, b = busy ? " · içeride biri var" : "";
+    if(s.clog) tasks.push({u:1, icon:"alert", txt:n+": tıkalı, pompala"+b, t:"s"+s.i, busy});
+    else if(s.dirt>.3) tasks.push({u:s.dirt>.6?1:0, icon:"brush", txt:n+": kirli (%"+Math.round(s.dirt*100)+")"+b, t:"s"+s.i, busy});
+    if(s.paper===0) tasks.push({u:1, icon:"roll", txt:n+": kağıt bitti"+b, t:"s"+s.i, busy, stock:true}); else if(s.paper===1) tasks.push({u:0, icon:"roll", txt:n+": kağıt azaldı"+b, t:"s"+s.i, busy, stock:true}); });
+  G.sinks.forEach(k => { const n = "Lavabo "+(k.i+1), busy = !!k.occ, b = busy ? " · dolu" : "";
+    if(k.dirt>.3) tasks.push({u:0, icon:"brush", txt:n+": ovulmalı"+b, t:"k"+k.i, busy});
+    if(k.soap===0) tasks.push({u:1, icon:"drop", txt:n+": sabun bitti"+b, t:"k"+k.i, busy, stock:true}); });
   const pc = G.puddles.length; if(pc) tasks.push({u:pc>=4?1:0, icon:"drop", txt:"Yerde "+pc+" birikinti", t:"p"});
-  if(G.player.carry===0 && tasks.some(x=>x.icon==="roll" || x.txt.includes("sabun"))) tasks.push({u:0, icon:"cart", txt:"Stok arabasından malzeme al", t:"c"});
-  tasks.sort((a,b)=>b.u-a.u);
+  if(noStock && tasks.some(x=>x.stock)) tasks.push({u:tasks.some(x=>x.stock && x.u)?1:0, icon:"cart", txt:"Stok arabasından malzeme al", t:"c"});
+  // doable first: free spots before occupied ones; stock jobs only when carrying stock
+  const doable = x => !x.busy && !(x.stock && noStock);
+  tasks.sort((a,b)=> (doable(b)-doable(a)) || (b.u-a.u));
   $("tCount").textContent = tasks.length; $("tCount").classList.toggle("zero", !tasks.length);
-  const th = tasks.length ? tasks.slice(0,6).map(x=>`<button type="button" class="task${x.u?" urgent":""}" data-t="${x.t}">${ic(x.icon)}<span>${x.txt}</span></button>`).join("") : `<p class="idle">Her şey pırıl pırıl. Keyfini çıkar.</p>`;
+  const th = tasks.length ? tasks.slice(0,6).map(x=>`<button type="button" class="task${x.u?" urgent":""}${x.busy?" busy":""}" data-t="${x.t}">${ic(x.icon)}<span>${x.txt}</span></button>`).join("") : `<p class="idle">Her şey pırıl pırıl. Keyfini çıkar.</p>`;
   if(th!==lastTasks){ $("tList").innerHTML = th; lastTasks = th; }
   // compact "next task" chip for phones (panel hidden)
   const chip = $("nextTask");
   if(state==="play" && $("side").hidden){
-    let top = tasks[0];
-    if(top && G.player.carry===0 && (top.icon==="roll" || top.txt.includes("sabun"))) top = {u:1, icon:"cart", txt:"Önce stok arabasına git", t:"c"};
-    const ch = top ? `${ic(top.icon)}<small>Sıradaki</small><span>${top.txt}</span>` : `${ic("hand")}<span>Her şey pırıl pırıl</span>`;
+    let top = tasks.find(doable) || null;
+    if(!top && tasks.some(x=>x.stock && !x.busy) && noStock) top = {u:1, icon:"cart", txt:"Önce stok arabasına git", t:"c"};
+    if(G.tut && G.tut.step) top = tutTask();
+    const waiting = !top && tasks.length;
+    const ch = top ? `${ic(top.icon)}<small>Sıradaki</small><span>${top.txt}</span>` : waiting ? `${ic("users")}<span>Kabinler dolu, çıkmalarını bekle</span>` : `${ic("hand")}<span>Her şey pırıl pırıl</span>`;
     if(chip.innerHTML!==ch) chip.innerHTML = ch;
     chip.dataset.t = top ? top.t : "";
     chip.className = "nexttask" + (top ? (top.u?" urgent":"") : " calm");
     chip.hidden = false;
-  } else chip.hidden = true;
+    const ms = $("miniStat"); ms.hidden = false; $("mQ").textContent = q.length; $("mC").textContent = G.player.carry+"/"+G.S.carry;
+    $("mQ").parentElement.classList.toggle("warn", q.length>=4); $("mC").parentElement.classList.toggle("warn", G.player.carry===0 && tasks.some(x=>x.stock));
+  } else { chip.hidden = true; $("miniStat").hidden = true; }
 }
 $("tList").addEventListener("click", e => { const b = e.target.closest("[data-t]"); if(b) doTask(b.dataset.t); });
 $("nextTask").addEventListener("click", () => doTask($("nextTask").dataset.t));
@@ -1420,13 +1444,23 @@ function openModal(html, closable=true){
   if(closable) $("mX").onclick = closeModal;
   const f = $("modalCard").querySelector(".cta") || $("modalCard").querySelector(".x"); if(f) f.focus({preventScroll:true});
 }
-function closeModal(){ $("modal").hidden = true; if(state==="play" && G.speed===0 && resumeSpeed) setSpeed(resumeSpeed); }
+let modalPrev = null;
+function closeModal(){ $("modal").hidden = true; if(state==="play" && modalPrev!==null){ setSpeed(modalPrev); modalPrev = null; } }
 $("modal").addEventListener("click", e => { if(e.target===$("modal") && modalClosable) closeModal(); });
-function pauseForModal(){ if(state==="play"){ if(G.speed) resumeSpeed = G.speed; setSpeed(0); } }
+function pauseForModal(){ if(state==="play"){ if(modalPrev===null) modalPrev = G.speed; if(G.speed) resumeSpeed = G.speed; setSpeed(0); } }
 
 function welcomeHtml(withCta=true){
   const touch = VW < 760 || (window.matchMedia && matchMedia("(pointer: coarse)").matches);
   const day1 = save.day===1;
+  if(day1 && withCta && !save.tut) return `<h2>${ic("toilet")}Flush Rush'a hoş geldin!</h2>
+  <p class="sub">Boğaz Hattı Yenikapı istasyonunun umumi tuvaleti artık senin. İşin üç adımı var:</p>
+  <div class="steps">
+    <div class="step"><b>1</b>${ic("cart")}<strong>Stok al</strong><small>Arabadan kağıt ve sabun</small></div>
+    <div class="step"><b>2</b>${ic("roll")}<strong>Kabine götür</strong><small>Azalan yere dokun, kendisi takar</small></div>
+    <div class="step"><b>3</b>${ic("drop")}<strong>Temizle</strong><small>Birikintinin üstünden geç, tıkananı pompala</small></div>
+  </div>
+  <div class="tip">${ic("hand")}<span>${touch ? "Nereye dokunursan oraya gider, işi kendisi yapar." : "Nereye tıklarsan oraya gider, işi kendisi yapar. WASD ile de yürüyebilirsin."} İlk adımları oyunda göstereceğim.</span></div>
+  <div class="actions"><button type="button" class="cta" id="bGo">Hadi başlayalım! ${ic("play")}</button></div>`;
   const intro = day1 ? ["acele","pis"] : Object.keys(TYPES).filter(k => TYPES[k].day===save.day);
   return `<h2>${ic("toilet")}${day1 ? "Flush Rush'a hoş geldin!" : "Gün "+save.day+" başlıyor"}</h2>
   <p class="sub">${day1 ? "Boğaz Hattı Yenikapı istasyonunun umumi tuvaleti artık senin." : "Müşteri akışı biraz daha yoğun. Önceliğini iyi seç."}</p>
@@ -1452,9 +1486,20 @@ function welcomeHtml(withCta=true){
   <div class="tip">${ic("spark")}<span>Temiz kabin bahşiş getirir. Titiz VIP lekeli kabine girmez ama iki kat öder.</span></div>
   ${withCta ? `<div class="actions"><button type="button" class="cta" id="bGo">${day1?"Hadi başlayalım!":"Kapıları aç"} ${ic("play")}</button></div>` : ""}`;
 }
+function startShift(z){ audio(); $("modal").hidden = true; modalPrev = null; newDay(); $("tutHint").hidden = true; if(save.day===1 && !save.tut && (!z || z.tut)) setupTutorial(); if(z) restoreShift(z); if(G.tut) showTutHint(); state="play"; setSpeed(1); resumeSpeed=1; followHold=0; fitCamera(); updateHud(true); if(z) announce("Kaldığın yerden devam: "+$("hClock").textContent, "play"); }
 function showWelcome(){
+  const z = savedShift();
+  if(z){
+    state = "menu";
+    const mins = 9*60 + Math.floor(clamp(z.t/150,0,1)*12*60), hh = String(Math.floor(mins/60)).padStart(2,"0")+":"+String(Math.floor(mins%60/10)*10).padStart(2,"0");
+    openModal(`<h2>${ic("toilet")}Vardiyan yarım kaldı</h2><p class="sub">Gün ${save.day}, saat ${hh}. Kazancın ve dükkanın son hali kaydedildi; içerideki müşteriler gitmiş olacak.</p>
+      <div class="stats"><div class="stat"><span>Bugünkü kazanç</span><b>₺${z.revenue}</b></div><div class="stat"><span>Hizmet verilen</span><b>${z.served}</b></div><div class="stat"><span>Kasa</span><b>₺${save.money}</b></div></div>
+      <div class="actions"><button type="button" class="cta" id="bGo">Vardiyaya devam et ${ic("play")}</button></div>`, false);
+    $("bGo").onclick = () => startShift(z);
+    return;
+  }
   state = "menu"; openModal(welcomeHtml(), false);
-  $("bGo").onclick = () => { audio(); $("modal").hidden = true; newDay(); state="play"; setSpeed(1); resumeSpeed=1; followHold=0; fitCamera(); updateHud(true); };
+  $("bGo").onclick = () => startShift(null);
 }
 function upgradesHtml(){
   return `<div class="ups">${UPGRADES.map(u => { const lv=upLv(u.id), max=u.costs.length, cost=u.costs[lv];
@@ -1482,7 +1527,8 @@ function statsHtml(){
   const rating = G.satN ? G.satSum/G.satN/20 : 0;
   return `<div class="stats">
     <div class="stat"><span>Kazanç</span><b>₺${G.revenue}</b></div>
-    <div class="stat"><span>Mutlu çıkan</span><b>${G.served}</b></div>
+    <div class="stat"><span>Hizmet verilen</span><b>${G.served}</b></div>
+    <div class="stat"><span>Memnun çıkan</span><b>${G.happy||0}</b></div>
     <div class="stat"><span>Kızgın giden</span><b>${G.angry}</b></div>
     <div class="stat"><span>Kayan</span><b>${G.slips}</b></div>
     <div class="stat"><span>Puan</span><b>${G.satN?rating.toFixed(1).replace(".",","):"–"}</b></div></div>`;
@@ -1494,7 +1540,7 @@ function showSettings(){
   <div class="actions" style="justify-content:flex-start"><button type="button" class="ghost" id="bMusic">Müzik: ${musicOn?"açık":"kapalı"}</button><button type="button" class="ghost" id="bHelp">Nasıl oynanır?</button><button type="button" class="ghost" id="bReset">İlerlemeyi sıfırla</button></div>
   <div id="rc" hidden style="font-size:14px;margin-top:10px">Tüm para ve yükseltmeler silinecek.<div class="actions" style="justify-content:flex-start"><button type="button" class="cta" id="bResetYes">Evet, sıfırla</button></div></div>`);
   $("bReset").onclick = () => { $("rc").hidden = false; };
-  $("bResetYes").onclick = () => { save = defaultSave(); persist(); newDay(); showWelcome(); };
+  $("bResetYes").onclick = () => { save = defaultSave(); persist(); clearShift(); newDay(); showWelcome(); };
   $("bHelp").onclick = () => openModal(welcomeHtml(false));
   $("bMusic").onclick = () => { musicOn = !musicOn; try{ localStorage.setItem("flushrush_music", musicOn?"1":"0"); }catch(e){} if(musicOn) audio(); else stopMusic(); $("bMusic").textContent = "Müzik: "+(musicOn?"açık":"kapalı"); };
 }
@@ -1503,7 +1549,7 @@ function endDay(){
   const rating = G.satN ? G.satSum/G.satN/20 : 0;
   const quip = rating>=4.5 ? "Belediye bu tuvaleti örnek gösteriyor." : rating>=3.5 ? "Fena değil. Kimse burnunu tıkamadan çıktı." : rating>=2.5 ? "Biraz kokulu bir gündü ama ayaktayız." : "Yorumlar acımasız. Yarın rövanş.";
   save.best = Math.max(save.best||0, G.revenue);
-  const finished = save.day; save.day++; persist();
+  const finished = save.day; save.day++; persist(); clearShift();
   const r = () => {
     openModal(`<h2>${ic("sun")}Gün ${finished} bitti</h2><p class="sub">${quip}</p>${statsHtml()}
       <div class="box" style="background:transparent;border:0;padding:0"><h4>${ic("spark")}Geliştir · Kasa ₺${save.money}</h4></div>${upgradesHtml()}
@@ -1514,6 +1560,60 @@ function endDay(){
   endSequence("Kapanış!", `Gün ${finished} · ${G.served} müşteri · ₺${G.revenue}`, "#e2694f", r);
 }
 
+// ---------- first-shift guided steps ----------
+const TUT = [null,
+  {icon:"cart", txt:"1/3 · Stok arabasına dokun, kağıt al", t:"c", hint:"Önce malzeme: <b>stok arabasına</b> dokun."},
+  {icon:"roll", txt:"2/3 · Kağıdı Kabin 1'e götür", t:"s0", hint:"Kabin 1'in kağıdı azalmış. <b>Kabine dokun</b>, kendisi takar."},
+  {icon:"drop", txt:"3/3 · Birikintinin üstünden geç", t:"p", hint:"Yerdeki birikintiye dokun. <b>Üstünden geçmek</b> silmeye yeter."}];
+function setupTutorial(){
+  G.tut = {step:1}; G.stalls[0].paper = 1; G.player.carry = 0;
+  G.puddles.push({x:300, y:330, amt:1, r:32, pts:[1,.9,1.1,.8,1,1.05,.9,1,.95], kind:"water", rot:0});
+  showTutHint();
+}
+function tutTask(){ const d = TUT[G.tut.step]; return {u:1, icon:d.icon, txt:d.txt, t:d.t}; }
+function tutNext(){
+  G.tut.step++; sfx.sparkle();
+  if(G.tut.step >= TUT.length){ G.tut = null; save.tut = 1; persist(); $("tutHint").hidden = true; announce("Harika! Gerisi senin. Tren gelince kalabalık başlar.", "spark"); return; }
+  showTutHint();
+}
+function showTutHint(){ const el = $("tutHint"); el.innerHTML = `${ic(TUT[G.tut.step].icon)}<span>${TUT[G.tut.step].hint}</span>`; el.hidden = false; updateHud(true); }
+function tutTarget(){
+  const st = G.tut && G.tut.step; if(!st || state!=="play") return null;
+  if(st===1) return toScreen(CART.x+CART.w/2, CART.y+CART.h/2, 80);
+  if(st===2) return toScreen(G.stalls[0].cx, 60, 190);
+  const p = G.puddles[0]; return p ? toScreen(p.x, p.y, 40) : null;
+}
+function drawTut(){
+  const sc = tutTarget(); if(!sc) return;
+  const b = Math.sin(performance.now()/180)*7, x = sc[0], y = sc[1] - 18 + b;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = "#f2c230"; ctx.strokeStyle = "#3b3226"; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(x, y+14); ctx.lineTo(x-14, y-4); ctx.lineTo(x-6, y-4); ctx.lineTo(x-6, y-22); ctx.lineTo(x+6, y-22); ctx.lineTo(x+6, y-4); ctx.lineTo(x+14, y-4); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.globalAlpha = .5 + .5*Math.sin(performance.now()/180); ctx.strokeStyle = "#f2c230"; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(sc[0], sc[1]+30, 30, 12, 0, 0, 6.3); ctx.stroke(); ctx.globalAlpha = 1;
+}
+const SHIFT_KEY = SAVE_KEY + "_shift";
+function snapshotShift(){
+  return {day:save.day, t:G.t, closing:G.closing, served:G.served, happy:G.happy||0, angry:G.angry, slips:G.slips, revenue:G.revenue, satSum:G.satSum, satN:G.satN,
+    stalls:G.stalls.map(s => ({dirt:s.dirt, clog:s.clog, paper:s.paper})), sinks:G.sinks.map(k => ({dirt:k.dirt, soap:k.soap})),
+    puddles:G.puddles.map(p => ({x:p.x, y:p.y, amt:p.amt, r:p.r, kind:p.kind})), carry:G.player.carry, px:G.player.x, py:G.player.y, tut:G.tut ? G.tut.step : 0};
+}
+function restoreShift(z){
+  Object.assign(G, {t:z.t, closing:z.closing, served:z.served, happy:z.happy, angry:z.angry, slips:z.slips, revenue:z.revenue, satSum:z.satSum, satN:z.satN});
+  z.stalls.forEach((v,i) => { if(G.stalls[i]) Object.assign(G.stalls[i], v); });
+  z.sinks.forEach((v,i) => { if(G.sinks[i]) Object.assign(G.sinks[i], v); });
+  G.puddles = z.puddles.map(p => ({...p, pts:Array.from({length:9},()=>rand(.72,1.15)), rot:rand(0,6)}));
+  G.player.carry = z.carry; G.player.x = z.px; G.player.y = z.py;
+  if(G.tut && z.tut) G.tut.step = z.tut;
+}
+let autoT = 0;
+function autosave(){ if(state!=="play" || !G) return; persist(); try{ localStorage.setItem(SHIFT_KEY, JSON.stringify(snapshotShift())); }catch(e){} }
+function clearShift(){ try{ localStorage.removeItem(SHIFT_KEY); }catch(e){} }
+function savedShift(){ try{ const z = JSON.parse(localStorage.getItem(SHIFT_KEY)||"null"); return z && z.day===save.day && z.t < 400 ? z : null; }catch(e){ return null; } }
+function showPaused(){
+  pauseForModal();
+  openModal(`<h2>${ic("pause")}Mola</h2><p class="sub">Vardiya duraklatıldı, ilerleme kaydedildi.</p><div class="actions"><button type="button" class="cta" id="bResume">Devam et ${ic("play")}</button></div>`);
+  $("bResume").onclick = () => { if(modalPrev===0) modalPrev = resumeSpeed || 1; closeModal(); };
+}
 function setSpeed(s){
   if(!G) return; G.speed = s;
   document.querySelectorAll(".speed button").forEach(b => b.classList.toggle("on", +b.dataset.speed===s));
@@ -1525,7 +1625,8 @@ $("dCodex").onclick = () => { audio(); if(state==="play") showCodex(); };
 $("dReport").onclick = () => { audio(); if(state==="play") showReport(); };
 $("dSettings").onclick = () => { audio(); if(state==="play") showSettings(); };
 $("dSound").onclick = () => { soundOn = !soundOn; if(!soundOn) stopMusic(); audio(); $("sndIcon").innerHTML = `<use href="#i-${soundOn?"vol":"mute"}"/>`; $("sndLbl").textContent = soundOn ? "Ses" : "Sessiz"; };
-document.addEventListener("visibilitychange", () => { if(document.hidden) stopMusic(); else if(actx && actx.state==="running" && soundOn && musicOn) startMusic(); if(document.hidden && state==="play" && G.speed){ resumeSpeed = G.speed; setSpeed(0); } });
+document.addEventListener("visibilitychange", () => { if(document.hidden) stopMusic(); else if(actx && actx.state==="running" && soundOn && musicOn) startMusic(); if(document.hidden){ autosave(); if(state==="play" && G.speed && !modalOpen()){ modalPrev = G.speed; resumeSpeed = G.speed; setSpeed(0); showPaused(); } } });
+addEventListener("pagehide", () => autosave());
 
 function resize(){
   DPR = Math.min(2, window.devicePixelRatio||1);
@@ -1633,7 +1734,7 @@ function loop(ts){
   if(state==="play" && G.speed>0){ update(raw*G.speed); updateHud(); }
   if(state==="play") updateCamera(raw);
   else if(G.marker){ G.marker.t -= raw; if(G.marker.t<=0) G.marker=null; }
-  render(); drawJuice(raw);
+  render(); drawJuice(raw); drawTut();
   requestAnimationFrame(loop);
 }
 
