@@ -1620,7 +1620,7 @@ function restoreShift(z){
 let autoT = 0;
 function autosave(){ if(state!=="play" || !G) return; persist(); try{ localStorage.setItem(SHIFT_KEY, JSON.stringify(snapshotShift())); }catch(e){} }
 function clearShift(){ try{ localStorage.removeItem(SHIFT_KEY); }catch(e){} }
-function savedShift(){ try{ const z = JSON.parse(localStorage.getItem(SHIFT_KEY)||"null"); return z && z.day===save.day && z.t < 400 ? z : null; }catch(e){ return null; } }
+function savedShift(){ try{ const z = JSON.parse(localStorage.getItem(SHIFT_KEY)||"null"); return z && z.day===save.day && z.graph && z.t < 400 ? z : null; }catch(e){ return null; } }
 function showPaused(){
   pauseForModal();
   openModal(`<h2>${ic("pause")}Mola</h2><p class="sub">Vardiya duraklatıldı, ilerleme kaydedildi.</p><div class="actions"><button type="button" class="cta" id="bResume">Devam et ${ic("play")}</button></div>`);

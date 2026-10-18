@@ -448,7 +448,7 @@ const SHIFT_KEY = SAVE_KEY + "_shift";
 let autoT = 0;
 function autosave(){ if(state!=="play" || !G || typeof snapshotShift!=="function") return; persist(); try{ localStorage.setItem(SHIFT_KEY, JSON.stringify(Object.assign({day:save.day}, snapshotShift()))); }catch(e){} }
 function clearShift(){ try{ localStorage.removeItem(SHIFT_KEY); }catch(e){} }
-function savedShift(){ if(typeof restoreShift!=="function") return null; try{ const z = JSON.parse(localStorage.getItem(SHIFT_KEY)||"null"); return z && z.day===save.day ? z : null; }catch(e){ return null; } }
+function savedShift(){ if(typeof restoreShift!=="function") return null; try{ const z = JSON.parse(localStorage.getItem(SHIFT_KEY)||"null"); return z && z.day===save.day && z.graph ? z : null; }catch(e){ return null; } }
 function startShift(z){ audio(); $("modal").hidden = true; modalPrev = null; newDay(); if(z) restoreShift(z); TUTS = null; tutEl().hidden = true; if(save.day===1 && !save.tut && typeof tutorialSteps==="function") startTutorial(tutorialSteps()); state="play"; setSpeed(1); resumeSpeed=1; fitCamera(); updateHud(true); if(z) announce("Kaldığın yerden devam: "+$("hClock").textContent, "play"); }
 function showPaused(){
   pauseForModal();
