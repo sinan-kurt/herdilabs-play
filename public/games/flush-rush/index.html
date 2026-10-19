@@ -447,17 +447,22 @@ function clampCam(){
   if(sx < VW*.1) cam.x += VW*.1-sx; if(sx > VW*.9) cam.x -= sx-VW*.9;
   if(sy < VH*.1) cam.y += VH*.1-sy; if(sy > VH*.9) cam.y -= sy-VH*.9;
 }
+// the cart sprite is taller than its floor footprint: test the drawn picture's box on screen
+function cartRect(){ const c = P(CART.x+CART.w/2, CART.y+CART.h/2), w = 112, h = CART_IMG.naturalWidth ? w*CART_IMG.naturalHeight/CART_IMG.naturalWidth : 120; return {x:c[0]-w/2, y:c[1]+24-h, w, h}; }
+function cartHit(sx, sy){ const r = cartRect(), x0 = r.x*cam.z+cam.x, y0 = r.y*cam.z+cam.y, pad = 4; return sx >= x0+r.w*cam.z*.06-pad && sx <= x0+r.w*cam.z*.94+pad && sy >= y0+r.h*cam.z*.04-pad && sy <= y0+r.h*cam.z+pad; }
 function tap(sx, sy){
   if(state!=="play" || G.speed===0) return;
-  const w = toWorld(sx, sy), pl = G.player, t = targetAt(w.x, w.y);
+  const w = toWorld(sx, sy), pl = G.player, t = cartHit(sx, sy) ? cartTarget() : targetAt(w.x, w.y);
   followHold = 0;
   if(t) sendTo(t);
-  else if(w.x>-10 && w.x<ROOM.w+10 && w.y>-10 && w.y<ROOM.h){ pl.target=null; pl.walk={x:w.x, y:w.y}; pl.work=null; G.marker={x:w.x,y:w.y,t:.6}; sfx.click(); }
+  else if(w.x>-10 && w.x<ROOM.w+10 && w.y>-10 && w.y<ROOM.h){ pl.target=null; pl.via=null; pl.walk={x:w.x, y:w.y}; pl.work=null; G.marker={x:w.x,y:w.y,t:.6}; sfx.click(); }
 }
-function sendTo(t){ const pl = G.player; pl.target=t; pl.walk={x:t.fx, y:t.fy}; pl.work=null; G.marker={x:t.fx,y:t.fy,t:.6}; sfx.click(); }
+function sendTo(t){ const pl = G.player; pl.target=t; pl.walk={x:t.fx, y:t.fy}; pl.via=null; pl.work=null;
+  // the cart blocks the way from behind: walk round its west end to the front
+  if(t.kind==="cart" && pl.y < CART.y+CART.h && pl.x > CART.x-24){ pl.walk = {x:CART.x-30, y:clamp(pl.y, CART.y-20, CART.y+CART.h/2)}; pl.via = [{x:CART.x-30, y:CART.y+CART.h+14}, {x:t.fx, y:t.fy}]; } G.marker={x:t.fx,y:t.fy,t:.6}; sfx.click(); }
 const stallTarget = s => ({kind:"stall", ref:s, fx:s.fx, fy:s.fy});
 const sinkTarget = k => ({kind:"sink", ref:k, fx:k.fx, fy:k.fy});
-const cartTarget = () => ({kind:"cart", ref:CART, fx:CART.x+CART.w/2, fy:CART.y-20});
+const cartTarget = () => ({kind:"cart", ref:CART, fx:CART.x+4, fy:CART.y+CART.h+22});
 function targetAt(x,y){
   for(const s of G.stalls) if(!s.locked && x>s.x && x<s.x+s.w && y>-90 && y<200) return stallTarget(s);
   for(const k of G.sinks) if(x>k.x-42 && x<k.x+42 && y>-90 && y<110) return sinkTarget(k);
@@ -638,8 +643,8 @@ function updatePlayer(dt){
   if(keys.has("KeyS")||keys.has("ArrowDown")) sy++;
   const holding = keys.has("Space")||keys.has("KeyE");
   let mx = sx + sy, my = -sx + sy;   // screen direction -> ground direction
-  if(sx||sy){ pl.walk=null; pl.target=null; }
-  else if(pl.walk){ const dx=pl.walk.x-pl.x, dy=pl.walk.y-pl.y, d=Math.hypot(dx,dy); if(d<6) pl.walk=null; else { mx=dx; my=dy; } }
+  if(sx||sy){ pl.walk=null; pl.target=null; pl.via=null; }
+  else if(pl.walk){ const dx=pl.walk.x-pl.x, dy=pl.walk.y-pl.y, d=Math.hypot(dx,dy); if(d<6) pl.walk = pl.via && pl.via.length ? pl.via.shift() : null; else { mx=dx; my=dy; } }
   const ml = Math.hypot(mx,my), spd = pl.work ? 0 : S.speed*(pl.mopping?.75:1);
   if(ml>0 && spd>0){ pl.x+=mx/ml*spd*dt; pl.y+=my/ml*spd*dt; pl.bob+=dt*14; if(Math.abs(mx-my)>.01) pl.dir = (mx-my)>0?1:-1; }
   const sx1 = STALL_X0-12, sx2 = STALL_X0 + 4*(STALL_W+STALL_GAP)+8;
@@ -647,7 +652,7 @@ function updatePlayer(dt){
   pl.y = clamp(pl.y, (pl.x>sx1 && pl.x<sx2) ? 170 : pl.x>=sx2 ? 82 : 22, ROOM.h-16);
   const cx=clamp(pl.x,CART.x,CART.x+CART.w), cy=clamp(pl.y,CART.y,CART.y+CART.h), cd=dist(pl.x,pl.y,cx,cy);
   if(cd<16){ if(cd===0) pl.y=CART.y-17; else { pl.x=cx+(pl.x-cx)/cd*16; pl.y=cy+(pl.y-cy)/cd*16; } }
-  for(const [ox,oy,orad] of [[250,530,20],[572,482,20],[868,528,24]]){ const d = dist(pl.x,pl.y,ox,oy); if(d<orad && d>0){ pl.x = ox+(pl.x-ox)/d*orad; pl.y = oy+(pl.y-oy)/d*orad; } }
+  for(const [ox,oy,orad] of [[250,530,20],[868,528,24]]){ const d = dist(pl.x,pl.y,ox,oy); if(d<orad && d>0){ pl.x = ox+(pl.x-ox)/d*orad; pl.y = oy+(pl.y-oy)/d*orad; } }
 
   pl.mopping = false;
   for(const p of G.puddles) if(dist(pl.x,pl.y,p.x,p.y) < p.r+12){
@@ -816,7 +821,7 @@ function drawCart(){
   shadow(CART.x+CART.w/2, CART.y+CART.h/2, 46, 18);
   if(CART_IMG.complete && CART_IMG.naturalWidth){
     const c = P(CART.x+CART.w/2, CART.y+CART.h/2), w = 112, h = w*CART_IMG.naturalHeight/CART_IMG.naturalWidth;
-    ctx.drawImage(CART_IMG, c[0]-w/2, c[1]+24-h, w, h); return;
+    const r = cartRect(); ctx.drawImage(CART_IMG, r.x, r.y, r.w, r.h); return;
   }
   box(CART.x, CART.y, 8, CART.w, CART.h, 28, "#f39a5a", C.orange, "#cf6a2a");
   for(let i=0;i<4;i++){ const p=P(CART.x+12+i*19, CART.y+14, 36); ctx.beginPath(); ctx.ellipse(p[0],p[1],7,5,0,0,6.3); ctx.fillStyle="#fff"; ctx.fill(); ctx.strokeStyle=C.ink; ctx.lineWidth=1.4; ctx.stroke(); ctx.beginPath(); ctx.ellipse(p[0],p[1],2,1.5,0,0,6.3); ctx.fillStyle=C.ink; ctx.fill(); }
@@ -1348,7 +1353,7 @@ function render(){
   G.stalls.forEach(s => { L.push({d:s.cx+40, f:()=>drawToilet(s)}); L.push({d:s.cx+STALL_D+1, f:()=>drawDoor(s)}); });
   for(let i=0;i<=4;i++){ const x = STALL_X0 - 3 + i*(STALL_W+STALL_GAP); L.push({d:x+STALL_D, f:()=>drawPartition(x)}); }
   G.sinks.forEach(k => L.push({d:k.x+30, f:()=>drawSink(k)}));
-  L.push({d:CART.x+CART.w+CART.h, f:drawCart});
+  L.push({d:CART.x+CART.y+(CART.w+CART.h)/2, f:drawCart});
   for(const [x,y] of [[-200,-250],[-200,180],[1060,-250],[1060,180],[350,-330],[750,-330]]) L.push({d:x+y+80, f:()=>drawColumn(x,y)});
   for(const [x,y] of [[-330,380],[990,600],[1150,600]]) L.push({d:x+y+40, f:()=>drawStationBench(x,y)});
   L.push({d:980+440+60, f:()=>drawVending(980,440)});
@@ -1357,7 +1362,6 @@ function render(){
   L.push({d:797, f:drawSignPost});
   L.push({d:700+34, f:()=>drawTrash(700,34)});
   L.push({d:250+530, f:()=>drawWetSign(250,530)});
-  L.push({d:572+482, f:()=>drawBucket(572,482)});
   L.push({d:868+528, f:()=>drawIndoorPlant(868,528)});
 
   const gx0 = DOOR.x-40, gx1 = DOOR.x+40;
@@ -1436,7 +1440,7 @@ function doTask(t){
   if(t[0]==="s") sendTo(stallTarget(G.stalls[+t.slice(1)]));
   else if(t[0]==="k") sendTo(sinkTarget(G.sinks[+t.slice(1)]));
   else if(t==="c") sendTo(cartTarget());
-  else if(t==="p" && G.puddles.length){ const pl=G.player, p = G.puddles.slice().sort((a,b)=>dist(pl.x,pl.y,a.x,a.y)-dist(pl.x,pl.y,b.x,b.y))[0]; pl.target=null; pl.work=null; pl.walk={x:p.x,y:p.y}; G.marker={x:p.x,y:p.y,t:.6}; sfx.click(); }
+  else if(t==="p" && G.puddles.length){ const pl=G.player, p = G.puddles.slice().sort((a,b)=>dist(pl.x,pl.y,a.x,a.y)-dist(pl.x,pl.y,b.x,b.y))[0]; pl.target=null; pl.work=null; pl.via=null; pl.walk={x:p.x,y:p.y}; G.marker={x:p.x,y:p.y,t:.6}; sfx.click(); }
 }
 
 // ---------- modals ----------
