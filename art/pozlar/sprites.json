@@ -1,0 +1,64 @@
+{
+  "canvas": [
+    512,
+    512
+  ],
+  "anchor": [
+    224,
+    400
+  ],
+  "characterHeight": 320,
+  "sprites": {
+    "idle": {
+      "file": "sprites/janitor-idle.png",
+      "sourceSize": [
+        1451,
+        1084
+      ],
+      "sourceAnchor": [
+        735,
+        978
+      ],
+      "sourceCharacterHeight": 926,
+      "scale": 0.34557235421166305,
+      "toolContact": null,
+      "anchorNote": "Bot tabanları arasındaki zemin noktası; görsel inceleme ile yaklaşık belirlendi."
+    },
+    "mop": {
+      "file": "sprites/janitor-mop.png",
+      "sourceSize": [
+        1451,
+        1084
+      ],
+      "sourceAnchor": [
+        650,
+        895
+      ],
+      "sourceCharacterHeight": 843,
+      "scale": 0.37959667852906287,
+      "toolContact": [
+        987,
+        1042
+      ],
+      "anchorNote": "Bot tabanları arasındaki zemin noktası; görsel inceleme ile yaklaşık belirlendi."
+    },
+    "plunger": {
+      "file": "sprites/janitor-plunger.png",
+      "sourceSize": [
+        1451,
+        1084
+      ],
+      "sourceAnchor": [
+        650,
+        975
+      ],
+      "sourceCharacterHeight": 900,
+      "scale": 0.35555555555555557,
+      "toolContact": [
+        877,
+        928
+      ],
+      "anchorNote": "Bot tabanları arasındaki zemin noktası; görsel inceleme ile yaklaşık belirlendi."
+    }
+  }
+}
