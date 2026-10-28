@@ -1,0 +1,22 @@
+{
+  "file": "public/games/flush-rush/assets/janitor-refill.png",
+  "sourceSize": [
+    1451,
+    1084
+  ],
+  "sourceAnchor": [
+    650,
+    947
+  ],
+  "sourceCharacterHeight": 877,
+  "rollCenter": [
+    1018,
+    500
+  ],
+  "targetCharacterHeight": 78,
+  "workType": "refill",
+  "targetKind": "stall",
+  "durationPerRoll": 0.8,
+  "background": "true alpha; cleaned with built-in image_gen",
+  "prompt": "Remove only background and checkerboard; preserve exact character, horizontal roll, hands, pose, clothing, outlines; actual transparency; no added ground shadow."
+}
