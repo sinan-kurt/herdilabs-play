@@ -297,6 +297,10 @@ const TYPES = {
             barks:["Yeni kabin açalım abi, genişletelim!","Abi bu oyun Google Play'e ne zaman geliyor?","Level de gelsin abi, level!"],
             robotBarks:["Talha-3000 iş başında, helal olsun!","Robot paspas! Tam istediğim gibi."],
             first:["Ellerine sağlık abi, tam aradığım tarz!"], noPaper:"Abi kâğıt yok, robota kâğıt da taktıralım!"},
+  selim:   {name:"Bakım Ustası Selim", col:"#5b7fb8", patience:38, speed:70, use:[3,4], dirt:.05, clog:.02, fee:9, day:4, special:true, tag:"Selim",
+            desc:"Dikkatli göz, sağlam testçi. Kabin duvarlarından geçme, yanlış noktadan iş yapma ve yürüme takılmalarını o yakaladı. Teşekkürler Selim!",
+            barks:["Duvarlar sağlam mı, bir kontrol edeyim.","Arabanın her yanı çalışıyor mu? Çalışıyor.","Bu kapının menteşesine bir yağ lazım."],
+            first:["Duvarların içinden geçmek yok usta, kapıyı kullanıyoruz!"], noPaper:"Askı boş kalmış usta, not ettim."},
 };
 // cameo guests: first visit from their day on is guaranteed, after that about every other day
 const GUESTS = Object.keys(TYPES).filter(k => TYPES[k].special);
@@ -471,7 +475,9 @@ function tap(sx, sy){
   followHold = 0;
   // a puddle tapped next to the cart must win over the cart's tall sprite
   const pud = (!t || t.kind==="cart") ? G.puddles.find(p => dist(w.x, w.y, p.x, p.y) < p.r+8) : null;
+  const r = cartBox(0), onCart = w.x>r.x0 && w.x<r.x1 && w.y>r.y0 && w.y<r.y1;
   if(pud) walkTo(pud.x, pud.y);
+  else if(t && t.kind==="cart" && pl.carry>=G.S.carry && !onCart) walkTo(w.x, w.y);
   else if(t) sendTo(t);
   else if(w.x>-10 && w.x<ROOM.w+10 && w.y>-10 && w.y<ROOM.h) walkTo(w.x, w.y);
 }
@@ -538,7 +544,11 @@ function sendTo(t){ const pl = G.player;
   // into a stall only through its door
   setRoute(pl, t.inside && stallAt(pl.x, pl.y)!==t.ref ? [{x:t.ref.cx, y:182}, goal] : [goal]);
   G.marker={x:t.fx,y:t.fy,t:.6}; sfx.click(); }
-const stallTarget = s => { const ps = s.clog && !s.occ ? plungeSpot(s) : null; return ps ? {kind:"stall", ref:s, fx:ps.x, fy:ps.y, inside:true} : {kind:"stall", ref:s, fx:s.fx, fy:s.fy}; };
+const insideSpot = s => plungeSpot(s) || {x:s.cx, y:120};   // art not loaded yet: still stand inside, never plunge from the door
+const stallTarget = s => {
+  const pl = G && G.player, here = pl && stallAt(pl.x, pl.y)===s;
+  if((s.clog && !s.occ) || here){ const ps = here && !s.clog ? {x:pl.x, y:pl.y} : insideSpot(s); return {kind:"stall", ref:s, fx:ps.x, fy:ps.y, inside:true}; }
+  return {kind:"stall", ref:s, fx:s.fx, fy:s.fy}; };
 const sinkTarget = k => ({kind:"sink", ref:k, fx:k.fx, fy:k.fy});
 // the cart can be loaded from any side: pick the one nearest the player
 function cartTarget(px, py){
@@ -555,7 +565,7 @@ function targetAt(x,y){
 }
 function nearestTarget(px,py){
   const c = [cartTarget(px, py)]; G.stalls.forEach(s=>{ if(!s.locked) c.push(stallTarget(s)); }); G.sinks.forEach(k=>c.push(sinkTarget(k)));
-  let best=null, bd=60; for(const t of c){ const d=dist(px,py,t.fx,t.fy); if(d<bd){bd=d;best=t;} } return best;
+  let best=null, bd=60; for(const t of c){ const d = t.inside && stallAt(px,py)!==t.ref ? dist(px,py,t.ref.fx,t.ref.fy) : dist(px,py,t.fx,t.fy); if(d<bd){bd=d;best=t;} } return best;
 }
 function jobFor(t){
   const pl = G.player;
@@ -735,19 +745,25 @@ function updatePlayer(dt){
   const spd = pl.work ? 0 : S.speed*(pl.mopping?.75:1);
   // arrive when within one step (at 2x a step is ~19 units: a fixed 6-unit radius made it overshoot back and forth)
   if(!(sx||sy) && pl.walk){ const dx=pl.walk.x-pl.x, dy=pl.walk.y-pl.y, d=Math.hypot(dx,dy); if(d < Math.max(6, spd*dt)){ pl.x = pl.walk.x; pl.y = pl.walk.y; pl.walk = pl.via && pl.via.length ? pl.via.shift() : null; } else { mx=dx; my=dy; } }
-  const ml = Math.hypot(mx,my);
+  const ml = Math.hypot(mx,my), ox = pl.x, oy = pl.y, st0 = stallAt(ox, oy);
   if(ml>0 && spd>0){ pl.x+=mx/ml*spd*dt; pl.y+=my/ml*spd*dt; pl.bob+=dt*14; if(Math.abs(mx-my)>.01) pl.dir = (mx-my)>0?1:-1; }
   const sx1 = STALL_X0-12, sx2 = STALL_X0 + 4*(STALL_W+STALL_GAP)+8;
   pl.x = clamp(pl.x, 18, ROOM.w-18);
   const tin = pl.target && pl.target.inside ? pl.target : null, inX = pl.x>sx1 && pl.x<sx2;
-  const minY = !inX ? (pl.x>=sx2 ? 82 : 22) : tin && Math.abs(pl.x - tin.fx) < 60 ? tin.fy - 4 : Math.min(170, pl.y);
-  pl.y = clamp(pl.y, minY, ROOM.h-16);
+  pl.y = clamp(pl.y, !inX ? (pl.x>=sx2 ? 82 : 22) : 74, ROOM.h-16);
+  // partitions are walls: inside a stall you stay between them; from outside you only get in through the front, and only for a job in there
+  if(st0){ pl.x = clamp(pl.x, st0.x+16, st0.x+st0.w-16); }
+  else if(inX && pl.y<170){
+    const s = G.stalls.find(q => pl.x>q.x && pl.x<q.x+q.w), entering = s && tin && tin.ref===s && oy>=166;
+    if(entering) pl.x = clamp(pl.x, s.x+16, s.x+s.w-16);
+    else if(ox<=sx1) pl.x = sx1; else if(ox>=sx2) pl.x = sx2; else pl.y = 170;
+  }
   const cx=clamp(pl.x,CART.x,CART.x+CART.w), cy=clamp(pl.y,CART.y,CART.y+CART.h), cd=dist(pl.x,pl.y,cx,cy);
   if(cd<16){ if(cd===0) pl.y=CART.y-17; else { pl.x=cx+(pl.x-cx)/cd*16; pl.y=cy+(pl.y-cy)/cd*16; } }
   for(const [ox,oy,orad] of [[250,530,20],[868,528,24]]){ const d = dist(pl.x,pl.y,ox,oy); if(d<orad && d>0){ pl.x = ox+(pl.x-ox)/d*orad; pl.y = oy+(pl.y-oy)/d*orad; } }
 
   pl.mopping = false;
-  for(const p of G.puddles) if(dist(pl.x,pl.y,p.x,p.y) < p.r+12){
+  if(!pl.work) for(const p of G.puddles) if(dist(pl.x,pl.y,p.x,p.y) < p.r+12){
     p.amt -= S.mop*dt; pl.mopping = true;
     if(Math.random()<dt*14) bubbles(p.x,p.y,2);
     if(Math.random()<dt*9) sfx.scrub();
@@ -757,6 +773,7 @@ function updatePlayer(dt){
 
   let t = null;
   if(pl.target && !pl.walk) t = pl.target; else if(holding) t = nearestTarget(pl.x, pl.y);
+  if(t && t.inside && stallAt(pl.x, pl.y)!==t.ref){ if(holding && !pl.walk && dist(pl.x,pl.y,t.ref.fx,t.ref.fy) < 62) sendTo(t); pl.work=null; return; }   // walk in first
   if(t && dist(pl.x,pl.y,t.fx,t.fy) > 62) t = null;
   if(!t){ pl.work=null; return; }
   const job = jobFor(t);
@@ -1359,6 +1376,7 @@ const LOOKS = {
   tikayici:{shirt:"#79b84a", shirtD:"#5f9a36", pants:"#7a6a58", hair:"#d4d4d4", hairStyle:"bald", flatcap:"#7a634b", mustache:"#e4e4e4", build:1.25, cane:true},
   telefon: {shirt:"#c38ad9", shirtD:"#a56fbd", pants:"#4b4f6b", hair:"#2c2230", hairStyle:"ponytail", phone:true},
   talha:   {shirt:"#f2a93b", shirtD:"#d18a22", pants:"#4b4f6b", hair:"#1f1b18", hairStyle:"spiky", phone:true},
+  selim:   {shirt:"#5b7fb8", shirtD:"#46679b", pants:"#3a3f4f", hair:"#3b2a20", hairStyle:"short", flatcap:"#3d5a86", toolbox:true},
   seha:    {shirt:"#2bb3a3", shirtD:"#1f9384", pants:"#3d4157", hair:"#2f2a28", hairStyle:"short", glasses:true},
   vip:     {shirt:"#fbfbf8", shirtD:"#e2e4e6", pants:"#f3f3ef", hair:"#1f1b18", hairStyle:"slick", tie:"#e2a62a", shades:true, chain:true},
   player:  {shirt:"#f7f2e6", shirtD:"#e6dcc6", pants:"#e2a62a", hair:"#3b2a20", hairStyle:"short", overalls:"#e2a62a", overallsD:"#c48a17", cap:"#e8813a", gloves:"#9fd35a"},
@@ -1505,6 +1523,9 @@ function drawCustomer(c){
   if(c.slip>0){ o.handF=[f*16,-34]; o.handB=[-f*16,-36]; }
   else if(L.phone && c.state!=="atSink"){ o.handF=[f*7,-46]; o.inHand = h => { ctx.fillStyle=C.ink; rr(h[0]-2.5,h[1]-6,5,10,1.5); ctx.fill(); ctx.fillStyle="#8fd3e8"; ctx.fillRect(h[0]-1.5,h[1]-4.5,3,6); }; }
   if(c.state==="atSink"){ o.handF=[f*8,-22]; o.handB=[f*2,-21]; o.back = true; }
+  if(L.toolbox && c.state!=="atSink" && !(c.slip>0)) o.toolBack = h => { ctx.strokeStyle=C.ink; ctx.lineWidth=1.6;
+    ctx.fillStyle="#d64545"; rr(h[0]-8,h[1]+2,16,9,2); ctx.fill(); ctx.stroke(); ctx.fillStyle="#b83636"; ctx.fillRect(h[0]-8,h[1]+5,16,2);
+    ctx.beginPath(); ctx.moveTo(h[0]-4,h[1]+2); ctx.lineTo(h[0]-4,h[1]-1); ctx.lineTo(h[0]+4,h[1]-1); ctx.lineTo(h[0]+4,h[1]+2); ctx.stroke(); };
   if(L.briefcase && c.state!=="atSink" && !(c.slip>0)) o.toolBack = h => { ctx.fillStyle="#6b4a2e"; ctx.strokeStyle=C.ink; ctx.lineWidth=1.6; rr(h[0]-6,h[1]+1,12,9,2); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(h[0]-2,h[1]+1); ctx.lineTo(h[0]-2,h[1]-1); ctx.lineTo(h[0]+2,h[1]-1); ctx.lineTo(h[0]+2,h[1]+1); ctx.stroke(); };
   if(L.cane && !(c.slip>0) && c.state!=="atSink") o.inHand = h => { ctx.strokeStyle="#8a5a3a"; ctx.lineWidth=2.6; ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(h[0],h[1]); ctx.lineTo(h[0]+f*3,h[1]+17); ctx.stroke(); ctx.beginPath(); ctx.arc(h[0]-f*2,h[1],3,Math.PI,0); ctx.stroke(); };
   drawChar(c.x, c.y, L, c.skin, o);
@@ -1642,7 +1663,7 @@ function drawParticles(){
   ctx.globalAlpha = 1;
 }
 function drawBubble(sx, sy, txt){
-  ctx.font="700 13px Nunito, sans-serif"; const w = Math.min(230, ctx.measureText(txt).width+20);
+  ctx.font="700 13px Nunito, sans-serif"; const w = Math.min(330, ctx.measureText(txt).width+20);
   const bx = clamp(sx-w/2, 6, VW-w-6), by = sy-40;
   ctx.shadowColor="rgba(60,40,20,.18)"; ctx.shadowBlur=10; ctx.shadowOffsetY=3;
   rr(bx,by,w,27,13); ctx.fillStyle="#fff8ec"; ctx.fill(); ctx.shadowColor="transparent";
@@ -1867,12 +1888,22 @@ function showReport(){ pauseForModal(); openModal(`<h2>${ic("chart")}Bugünün r
 function showSettings(){
   pauseForModal();
   openModal(`<h2>${ic("gear")}Ayarlar</h2><p class="sub">İlerleme bu tarayıcıda saklanır.</p>
-  <div class="actions" style="justify-content:flex-start"><button type="button" class="ghost" id="bMusic">Müzik: ${musicOn?"açık":"kapalı"}</button><button type="button" class="ghost" id="bHelp">Nasıl oynanır?</button><button type="button" class="ghost" id="bReset">İlerlemeyi sıfırla</button></div>
+  <div class="actions" style="justify-content:flex-start"><button type="button" class="ghost" id="bMusic">Müzik: ${musicOn?"açık":"kapalı"}</button><button type="button" class="ghost" id="bHelp">Nasıl oynanır?</button><button type="button" class="ghost" id="bThanks">Teşekkürler</button><button type="button" class="ghost" id="bReset">İlerlemeyi sıfırla</button></div>
   <div id="rc" hidden style="font-size:14px;margin-top:10px">Tüm para ve yükseltmeler silinecek.<div class="actions" style="justify-content:flex-start"><button type="button" class="cta" id="bResetYes">Evet, sıfırla</button></div></div>`);
   $("bReset").onclick = () => { $("rc").hidden = false; };
   $("bResetYes").onclick = () => { save = defaultSave(); persist(); clearShift(); newDay(); showWelcome(); };
   $("bHelp").onclick = () => openModal(welcomeHtml(false));
+  $("bThanks").onclick = showThanks;
   $("bMusic").onclick = () => { musicOn = !musicOn; try{ localStorage.setItem("flushrush_music", musicOn?"1":"0"); }catch(e){} if(musicOn) audio(); else stopMusic(); $("bMusic").textContent = "Müzik: "+(musicOn?"açık":"kapalı"); };
+}
+const THANKS = [
+  ["seha", "Seha", "İlk oyun testçisi.", "Kâğıt göstergesi, arabanın her yanından stok alınması ve yürüme yollarındaki hatalar onun geri bildirimiyle geldi."],
+  ["talha", "Talha", "Fikir babası.", "Robot paspas Talha-3000 onun fikri. Tuvaleti büyütme ve level önerileri sırada."],
+  ["selim", "Selim", "Dikkatli göz, sağlam testçi.", "Kabinlerden servis arabasına kadar her köşeyi denedi; hareket ve temizlik hatalarını bulmamıza yardımcı oldu."],
+];
+function showThanks(){
+  openModal(`<h2>${ic("users")}Teşekkürler</h2><p class="sub">Flush Rush'ı ilk oynayan, kıran ve düzelten ekip.</p>
+  <div class="codex">${THANKS.map(([k,n,role,note]) => `<div class="ct"><span class="dot" style="background:${TYPES[k].col}"></span><div><strong>${n} — ${role}</strong><p>${note}</p></div></div>`).join("")}</div>`);
 }
 function endDay(){
   state = "end"; setSpeed(0);

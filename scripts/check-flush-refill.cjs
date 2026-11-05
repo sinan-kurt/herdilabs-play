@@ -21,7 +21,7 @@ const sim={...job,Math,keys:new Set(),G:{player:{x:30,y:300,walk:null,target:{ki
 // existing sendTo guard used by repeated Next taps.
 const send=html.slice(html.indexOf('// ---------- routing'),html.indexOf('\nconst stallTarget'));
 for(const delta of [1/60,2/60]){
- const s={...sim,G:{...sim.G,player:{...sim.G.player,target:{kind:'stall',ref:{paper:0},fx:30,fy:300}},puddles:[]},sfx:{pick:()=>{},click:()=>{}}};vm.createContext(s);vm.runInContext(update+';'+send+';globalThis.step=updatePlayer;globalThis.send=sendTo;',s);
+ const s={...sim,G:{...sim.G,player:{...sim.G.player,target:{kind:'stall',ref:{paper:0},fx:30,fy:300}},puddles:[]},sfx:{pick:()=>{},click:()=>{}}};vm.createContext(s);vm.runInContext(update+';'+send+';\nglobalThis.step=updatePlayer;globalThis.send=sendTo;',s);
  for(let i=0;i<Math.ceil(.8/delta)+1;i++){s.send(s.G.player.target);s.step(delta)}
  assert.equal(s.G.player.target.ref.paper,1);assert.equal(s.G.player.carry,1);
 }
