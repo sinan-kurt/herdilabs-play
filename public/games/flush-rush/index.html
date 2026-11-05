@@ -260,7 +260,7 @@ const C = {
 
 const SAVE_KEY = "flushrush_web_v1";
 const defUp = () => ({paspas:0,pompa:0,kova:0,ayakkabi:0,kabin:0,koku:0});
-const defaultSave = () => ({day:1, money:0, up:defUp(), best:0});
+const defaultSave = () => ({day:1, money:0, up:defUp(), best:0, sehaMet:false});
 let save = defaultSave();
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)||"null"); if(s && s.up) save = Object.assign(defaultSave(), s, {up:Object.assign(defUp(), s.up)}); } catch(e){}
 const persist = () => { try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch(e){} };
@@ -286,6 +286,10 @@ const TYPES = {
             desc:"Kabine girer, konferans görüşmesine başlar. Kabini uzun süre kilitler.", barks:["...evet abi dinliyorum...","Yok yok, müsaitim, söyle.","Sesim yankılanıyor mu?"]},
   vip:     {name:"Titiz VIP", col:"#ffffff", patience:26, speed:68, use:[3,4], dirt:.1, clog:.05, fee:12, day:4, picky:true,
             desc:"Lekeli kabine asla girmez ama iki kat öder.", barks:["Burada dezenfektan var mı?","Lekeli kabine girmem.","Mükemmel. Tam bir saray."]},
+  // thank-you cameo for the game's first playtester: drops in now and then, never in the regular pool
+  seha:    {name:"Seha · İlk Testçi", col:"#2bb3a3", patience:40, speed:80, use:[3,4], dirt:.05, clog:.03, fee:9, day:2, special:true, tag:"Seha",
+            desc:"Oyunun ilk testçisi. Kabinlerdeki kâğıdı sayar, yolları ezbere bilir, bahşişi cömerttir. Teşekkürler Seha!",
+            barks:["Kaç rulo kaldı bakayım...","Araba önden de alınıyor artık, güzel.","Not alıyorum, devam."]},
 };
 
 let actx = null, soundOn = true, musicOn = true;
@@ -392,6 +396,7 @@ function newDay(){
   const sinks = [0,1].map(i => ({i, x:770+i*86, fx:770+i*86, fy:84, dirt:0, soap:4, occ:null, res:null, spots:makeSpots(5)}));
   G = { t:0, dayLen:150, closing:false, S, stalls, sinks, puddles:[], customers:[], queue:[], particles:[], floats:[],
     player:{x:470, y:360, dir:1, carry:0, work:null, target:null, walk:null, bob:0, mopping:false, nagT:0},
+    sehaT: save.day>=2 && (!save.sehaMet || Math.random()<.5) ? rand(30, 100) : -1,
     spawnT:2, train:newTrain(), trickleT:rand(8,14), served:0, angry:0, slips:0, revenue:0, satSum:0, satN:0, shake:0, speed:1, marker:null };
 }
 const decor = {
@@ -565,11 +570,12 @@ function floatText(x,y,z,txt,col=C.ink,big=false){ G.floats.push({x,y,z,txt,col,
 function say(c, txt, dur=2.4){ c.bubble = {txt, t:dur}; sfx.bark(); }
 
 // ---------- customers ----------
-const availableTypes = () => Object.keys(TYPES).filter(k => TYPES[k].day <= save.day);
-function spawnCustomer(from){
+const availableTypes = () => Object.keys(TYPES).filter(k => TYPES[k].day <= save.day && !TYPES[k].special);
+function spawnCustomer(from, force){
   const pool = availableTypes(), w = pool.map(k => k==="normal"?3 : k==="vip"?1 : k==="pis"?.8 : 1.6);
   let r = Math.random()*w.reduce((a,b)=>a+b,0), type = pool[0];
   for(let i=0;i<pool.length;i++){ r-=w[i]; if(r<=0){ type=pool[i]; break; } }
+  if(force) type = force;
   if(type==="pis" && G.customers.some(c=>c.type==="pis")) type = "normal";   // one muddy guest at a time
   const T = TYPES[type], side = Math.random()<.5 ? -1 : 1, pat = T.patience*G.S.patience;
   const o = from || (side<0 ? {x:ST.x0+10, y:580+rand(-20,20), esc:true} : {x:1320, y:620+rand(-20,20)});
@@ -631,7 +637,7 @@ function updateCustomer(c, dt){
   }
   switch(c.state){
     case "arrive":
-      if(followPath(c, dt)){ c.state="queue"; G.queue.push(c); if(Math.random()<.5) say(c, pick(c.T.barks)); }
+      if(followPath(c, dt)){ c.state="queue"; G.queue.push(c); if(c.T.special){ if(!c.hi){ c.hi=true; floatText(c.x, c.y, 80, c.T.tag+" geldi!", C.good, true); sfx.chime(); } } else if(Math.random()<.5) say(c, pick(c.T.barks)); }
       break;
     case "queue": {
       const idx = G.queue.indexOf(c), sp = queueSpot(Math.min(idx,8));
@@ -663,7 +669,9 @@ function updateCustomer(c, dt){
       const s = c.stall; c.timer -= dt;
       if(c.type==="telefon" && Math.random()<dt*.25) say(c, pick(TYPES.telefon.barks), 2.6);
       if(c.timer<=0){
-        if(s.paper>0) s.paper--; else { c.sat-=35; say(c, pick(["KAĞIT YOK MU YA?!","Peçeteyle mi idare edeyim?","Bu ne çile..."]), 2.6); sfx.angry(); }
+        if(c.type==="seha"){ const first = !save.sehaMet; save.sehaMet = true; persist();
+          say(c, s.paper>0 ? (first ? "Bu sefer tuvalet kâğıdı var, güzel!" : pick(TYPES.seha.barks)) : "Yine mi kâğıt yok?! Bunu da rapora yazıyorum.", 3.2); }
+        if(s.paper>0) s.paper--; else if(c.type==="seha") c.sat-=20; else { c.sat-=35; say(c, pick(["KAĞIT YOK MU YA?!","Peçeteyle mi idare edeyim?","Bu ne çile..."]), 2.6); sfx.angry(); }
         if(s.dirt<=0) s.spots = makeSpots(9);
         s.dirt = clamp(s.dirt + c.T.dirt*rand(.7,1.2), 0, 1);
         if(Math.random()<c.T.clog){ s.clog=true; say(c, pick(["Ehm... sifon bir tuhaf.","Ben bir şey yapmadım.","Su yükseliyor mu o?"]), 2.6); burst(s.cx,s.cy+10,20,6,C.water,50); }
@@ -777,6 +785,7 @@ function update(dt){
   if(!G.closing && !G.noWave){ G.trickleT -= dt; if(G.trickleT<=0){
     G.trickleT = Math.max(16, 26 - save.day)*rand(.8,1.2);
     if(G.queue.length < 4 && G.customers.length < 9) spawnCustomer(); } }
+  if(G.sehaT>0 && !G.closing && !G.tut){ G.sehaT -= dt; if(G.sehaT<=0){ if(G.queue.length<5 && !G.customers.some(c=>c.type==="seha")) spawnCustomer(null, "seha"); else G.sehaT = 6; } }
   updatePlayer(dt);
   G.customers.forEach(c => updateCustomer(c, dt));
   G.customers = G.customers.filter(c=>!c.dead);
@@ -1290,6 +1299,7 @@ const LOOKS = {
   pis:     {shirt:"#9a7b45", shirtD:"#7d6233", pants:"#6b5a44", hair:"#4a3a2a", hairStyle:"messy", beanie:"#6d8a4a", stains:true, flies:true},
   tikayici:{shirt:"#79b84a", shirtD:"#5f9a36", pants:"#7a6a58", hair:"#d4d4d4", hairStyle:"bald", flatcap:"#7a634b", mustache:"#e4e4e4", build:1.25, cane:true},
   telefon: {shirt:"#c38ad9", shirtD:"#a56fbd", pants:"#4b4f6b", hair:"#2c2230", hairStyle:"ponytail", phone:true},
+  seha:    {shirt:"#2bb3a3", shirtD:"#1f9384", pants:"#3d4157", hair:"#2f2a28", hairStyle:"short", glasses:true},
   vip:     {shirt:"#fbfbf8", shirtD:"#e2e4e6", pants:"#f3f3ef", hair:"#1f1b18", hairStyle:"slick", tie:"#e2a62a", shades:true, chain:true},
   player:  {shirt:"#f7f2e6", shirtD:"#e6dcc6", pants:"#e2a62a", hair:"#3b2a20", hairStyle:"short", overalls:"#e2a62a", overallsD:"#c48a17", cap:"#e8813a", gloves:"#9fd35a"},
 };
@@ -1438,6 +1448,10 @@ function drawCustomer(c){
   if(L.briefcase && c.state!=="atSink" && !(c.slip>0)) o.toolBack = h => { ctx.fillStyle="#6b4a2e"; ctx.strokeStyle=C.ink; ctx.lineWidth=1.6; rr(h[0]-6,h[1]+1,12,9,2); ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.moveTo(h[0]-2,h[1]+1); ctx.lineTo(h[0]-2,h[1]-1); ctx.lineTo(h[0]+2,h[1]-1); ctx.lineTo(h[0]+2,h[1]+1); ctx.stroke(); };
   if(L.cane && !(c.slip>0) && c.state!=="atSink") o.inHand = h => { ctx.strokeStyle="#8a5a3a"; ctx.lineWidth=2.6; ctx.lineCap="round"; ctx.beginPath(); ctx.moveTo(h[0],h[1]); ctx.lineTo(h[0]+f*3,h[1]+17); ctx.stroke(); ctx.beginPath(); ctx.arc(h[0]-f*2,h[1],3,Math.PI,0); ctx.stroke(); };
   drawChar(c.x, c.y, L, c.skin, o);
+  if(c.T && c.T.tag){ const p = P(c.x, c.y), y = p[1]-(c.state==="queue"?78:66);
+    ctx.font = "900 11px Nunito, sans-serif"; const tw = ctx.measureText(c.T.tag).width+14;
+    rr(p[0]-tw/2, y-8, tw, 16, 8); ctx.fillStyle = c.T.col; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(c.T.tag, p[0], y+.5); }
   if(c.state==="queue"){
     const fr = clamp(c.patience/c.maxPat,0,1), p = P(c.x,c.y);
     ctx.beginPath(); ctx.arc(p[0], p[1]-62, 5.5, 0, 6.3); ctx.fillStyle="#fff"; ctx.fill(); ctx.strokeStyle="rgba(59,50,38,.35)"; ctx.lineWidth=1; ctx.stroke();
@@ -1578,7 +1592,7 @@ function drawBubble(sx, sy, txt){
 }
 function drawOverlay(){
   for(const c of G.customers){ if(!c.bubble) continue;
-    const s = c.state==="inStall" && c.stall ? toScreen(c.stall.cx, STALL_D, 80) : toScreen(c.x, c.y, 82);
+    const s = c.state==="inStall" && c.stall ? toScreen(c.stall.cx, STALL_D, 80) : toScreen(c.x, c.y, c.T && c.T.tag ? 122 : 82);   // named guests: bubble clears the name tag
     drawBubble(s[0], s[1], c.bubble.txt); }
   for(const f of G.floats){ const s = toScreen(f.x, f.y, f.z), age = 1.4 - f.life, k = clamp(age/.18, 0, 1), sc = 1 + .55*Math.sin(k*Math.PI)*(f.big?1:.6);
     ctx.save(); ctx.translate(s[0], s[1]-f.rise); ctx.scale(sc, sc);
@@ -1716,7 +1730,7 @@ function welcomeHtml(withCta=true){
   </div>
   <div class="tip">${ic("hand")}<span>${touch ? "Nereye dokunursan oraya gider, işi kendisi yapar." : "Nereye tıklarsan oraya gider, işi kendisi yapar. WASD ile de yürüyebilirsin."} İlk adımları oyunda göstereceğim.</span></div>
   <div class="actions"><button type="button" class="cta" id="bGo">Hadi başlayalım! ${ic("play")}</button></div>`;
-  const intro = day1 ? ["acele","pis"] : Object.keys(TYPES).filter(k => TYPES[k].day===save.day);
+  const intro = day1 ? ["acele","pis"] : Object.keys(TYPES).filter(k => TYPES[k].day===save.day && !TYPES[k].special);
   return `<h2>${ic("toilet")}${day1 ? "Flush Rush'a hoş geldin!" : "Gün "+save.day+" başlıyor"}</h2>
   <p class="sub">${day1 ? "Boğaz Hattı Yenikapı istasyonunun umumi tuvaleti artık senin." : "Müşteri akışı biraz daha yoğun. Önceliğini iyi seç."}</p>
   <div class="cols">
@@ -1775,8 +1789,8 @@ function showShop(){
 function showCodex(){
   pauseForModal();
   openModal(`<h2>${ic("users")}Müşteriler</h2><p class="sub">Her tip uzaktan renginden ve aksesuarından tanınır.</p>
-  <div class="codex">${Object.values(TYPES).map(t => { const open = t.day<=save.day;
-    return `<div class="ct${open?"":" locked"}"><span class="dot" style="background:${open?t.col:"#e8dcc7"}"></span><div><strong>${open?t.name:"???"}</strong><p>${open?t.desc:"Gün "+t.day+"'te gelecek."}</p></div></div>`; }).join("")}</div>`);
+  <div class="codex">${Object.values(TYPES).map(t => { const open = t.special ? save.sehaMet : t.day<=save.day;
+    return `<div class="ct${open?"":" locked"}"><span class="dot" style="background:${open?t.col:"#e8dcc7"}"></span><div><strong>${open?t.name:"???"}</strong><p>${open?t.desc:t.special?"Sürpriz bir konuk. Gözün kuyrukta olsun.":"Gün "+t.day+"'te gelecek."}</p></div></div>`; }).join("")}</div>`);
 }
 function statsHtml(){
   const rating = G.satN ? G.satSum/G.satN/20 : 0;
