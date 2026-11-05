@@ -1811,7 +1811,7 @@ function welcomeHtml(withCta=true){
     <div class="step"><b>3</b>${ic("drop")}<strong>Temizle</strong><small>Birikintinin üstünden geç, tıkananı pompala</small></div>
   </div>
   <div class="tip">${ic("hand")}<span>${touch ? "Nereye dokunursan oraya gider, işi kendisi yapar." : "Nereye tıklarsan oraya gider, işi kendisi yapar. WASD ile de yürüyebilirsin."} İlk adımları oyunda göstereceğim.</span></div>
-  <div class="actions"><button type="button" class="cta" id="bGo">Hadi başlayalım! ${ic("play")}</button></div>`;
+  <div class="actions"><button type="button" class="ghost" id="bThanksM">${ic("users")}Teşekkürler</button><button type="button" class="cta" id="bGo">Hadi başlayalım! ${ic("play")}</button></div>`;
   const intro = day1 ? ["acele","pis"] : Object.keys(TYPES).filter(k => TYPES[k].day===save.day && !TYPES[k].special);
   return `<h2>${ic("toilet")}${day1 ? "Flush Rush'a hoş geldin!" : "Gün "+save.day+" başlıyor"}</h2>
   <p class="sub">${day1 ? "Boğaz Hattı Yenikapı istasyonunun umumi tuvaleti artık senin." : "Müşteri akışı biraz daha yoğun. Önceliğini iyi seç."}</p>
@@ -1835,7 +1835,7 @@ function welcomeHtml(withCta=true){
   </div>
   ${withCta ? intro.map(k=>`<div class="newb"><span class="dot" style="background:${TYPES[k].col}"></span><div><b>${day1?"Bugün tanışacağın: ":"Yeni müşteri: "}${TYPES[k].name}</b><br><span style="font-size:13px;color:var(--muted)">${TYPES[k].desc}</span></div></div>`).join("") : ""}
   <div class="tip">${ic("spark")}<span>Temiz kabin bahşiş getirir. Titiz VIP lekeli kabine girmez ama iki kat öder.</span></div>
-  ${withCta ? `<div class="actions"><button type="button" class="cta" id="bGo">${day1?"Hadi başlayalım!":"Kapıları aç"} ${ic("play")}</button></div>` : ""}`;
+  ${withCta ? `<div class="actions"><button type="button" class="ghost" id="bThanksM">${ic("users")}Teşekkürler</button><button type="button" class="cta" id="bGo">${day1?"Hadi başlayalım!":"Kapıları aç"} ${ic("play")}</button></div>` : ""}`;
 }
 function startShift(z){ audio(); $("modal").hidden = true; modalPrev = null; newDay(); $("tutHint").hidden = true; if(!z && save.day===1 && !save.tut) setupTutorial(); if(z) restoreShift(z); if(G.tut) showTutHint(); state="play"; setSpeed(1); resumeSpeed=1; followHold=0; fitCamera(); updateHud(true); if(z) announce("Kaldığın yerden devam: "+$("hClock").textContent, "play"); }
 function showWelcome(){
@@ -1845,12 +1845,12 @@ function showWelcome(){
     const mins = 9*60 + Math.floor(clamp(z.t/150,0,1)*12*60), hh = String(Math.floor(mins/60)).padStart(2,"0")+":"+String(Math.floor(mins%60/10)*10).padStart(2,"0");
     openModal(`<h2>${ic("toilet")}Vardiyan yarım kaldı</h2><p class="sub">Gün ${save.day}, saat ${hh}. Müşteriler, kuyruk, kirler ve sepetin bıraktığın gibi duruyor.</p>
       <div class="stats"><div class="stat"><span>Bugünkü kazanç</span><b>₺${z.revenue}</b></div><div class="stat"><span>Hizmet verilen</span><b>${z.served}</b></div><div class="stat"><span>Kasa</span><b>₺${save.money}</b></div></div>
-      <div class="actions"><button type="button" class="cta" id="bGo">Vardiyaya devam et ${ic("play")}</button></div>`, false);
-    $("bGo").onclick = () => startShift(z);
+      <div class="actions"><button type="button" class="ghost" id="bThanksM">${ic("users")}Teşekkürler</button><button type="button" class="cta" id="bGo">Vardiyaya devam et ${ic("play")}</button></div>`, false);
+    $("bGo").onclick = () => startShift(z); $("bThanksM").onclick = () => showThanks(showWelcome);
     return;
   }
   state = "menu"; openModal(welcomeHtml(), false);
-  $("bGo").onclick = () => startShift(null);
+  $("bGo").onclick = () => startShift(null); if($("bThanksM")) $("bThanksM").onclick = () => showThanks(showWelcome);
 }
 function upgradesHtml(){
   return `<div class="ups">${UPGRADES.map(u => { const lv=upLv(u.id), max=u.costs.length, cost=u.costs[lv];
@@ -1893,17 +1893,20 @@ function showSettings(){
   $("bReset").onclick = () => { $("rc").hidden = false; };
   $("bResetYes").onclick = () => { save = defaultSave(); persist(); clearShift(); newDay(); showWelcome(); };
   $("bHelp").onclick = () => openModal(welcomeHtml(false));
-  $("bThanks").onclick = showThanks;
+  $("bThanks").onclick = () => showThanks();
   $("bMusic").onclick = () => { musicOn = !musicOn; try{ localStorage.setItem("flushrush_music", musicOn?"1":"0"); }catch(e){} if(musicOn) audio(); else stopMusic(); $("bMusic").textContent = "Müzik: "+(musicOn?"açık":"kapalı"); };
 }
 const THANKS = [
-  ["seha", "Seha", "İlk oyun testçisi.", "Kâğıt göstergesi, arabanın her yanından stok alınması ve yürüme yollarındaki hatalar onun geri bildirimiyle geldi."],
-  ["talha", "Talha", "Fikir babası.", "Robot paspas Talha-3000 onun fikri. Tuvaleti büyütme ve level önerileri sırada."],
-  ["selim", "Selim", "Dikkatli göz, sağlam testçi.", "Kabinlerden servis arabasına kadar her köşeyi denedi; hareket ve temizlik hatalarını bulmamıza yardımcı oldu."],
+  ["seha", "Seha", "İlk oyun testçisi", "Oyunu daha anlaşılır ve keyifli hâle getiren önerilerin, ilerleme sistemi ve taşıma detaylarına kattığın fikirler için teşekkürler!"],
+  ["talha", "Talha", "Fikir babası", "Yardımcı robot, yeni tuvaletler ve büyüyen bir işletme fikrinle Flush Rush'ın geleceğine ilham verdiğin için teşekkürler!"],
+  ["selim", "Selim", "Bakım ustası", "Her köşeyi deneyip gözden kaçan hareket ve etkileşim hatalarını yakaladığın, oyunun daha düzgün çalışmasına yardımcı olduğun için teşekkürler!"],
 ];
-function showThanks(){
+// from the menu it opens with a back button (the menu itself can't be dismissed); from Settings it just closes
+function showThanks(back){
   openModal(`<h2>${ic("users")}Teşekkürler</h2><p class="sub">Flush Rush'ı ilk oynayan, kıran ve düzelten ekip.</p>
-  <div class="codex">${THANKS.map(([k,n,role,note]) => `<div class="ct"><span class="dot" style="background:${TYPES[k].col}"></span><div><strong>${n} — ${role}</strong><p>${note}</p></div></div>`).join("")}</div>`);
+  <div class="codex">${THANKS.map(([k,n,role,note]) => `<div class="ct"><span class="dot" style="background:${TYPES[k].col}"></span><div><strong>${n} · ${role}</strong><p>${note}</p></div></div>`).join("")}</div>
+  ${typeof back==="function" ? `<div class="actions"><button type="button" class="cta" id="bThanksBack">Geri</button></div>` : ""}`, typeof back!=="function");
+  if(typeof back==="function") $("bThanksBack").onclick = back;
 }
 function endDay(){
   state = "end"; setSpeed(0);
