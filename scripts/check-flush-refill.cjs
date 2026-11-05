@@ -19,7 +19,7 @@ const update=html.slice(html.indexOf('function updatePlayer('),html.indexOf('\nf
 const sim={...job,Math,keys:new Set(),G:{player:{x:30,y:300,walk:null,target:{kind:'stall',ref,fx:30,fy:300},carry:2,work:null},S:{speed:190},puddles:[],tut:null},clamp:env.clamp,dist:(a,b,c,d)=>Math.hypot(a-c,b-d),STALL_X0:170,STALL_W:124,STALL_GAP:6,ROOM:{w:900,h:560},CART:{x:420,y:440,w:84,h:44},jobFor:()=>({type:'refill',time:.8}),sfx:{pick:()=>{}},floatText:()=>{},exitStallFirst:()=>{}};
 // Exercise real updatePlayer at normal and 2x simulation deltas, including the
 // existing sendTo guard used by repeated Next taps.
-const send=html.slice(html.indexOf('function sendTo('),html.indexOf('\nconst stallTarget'));
+const send=html.slice(html.indexOf('// ---------- routing'),html.indexOf('\nconst stallTarget'));
 for(const delta of [1/60,2/60]){
  const s={...sim,G:{...sim.G,player:{...sim.G.player,target:{kind:'stall',ref:{paper:0},fx:30,fy:300}},puddles:[]},sfx:{pick:()=>{},click:()=>{}}};vm.createContext(s);vm.runInContext(update+';'+send+';globalThis.step=updatePlayer;globalThis.send=sendTo;',s);
  for(let i=0;i<Math.ceil(.8/delta)+1;i++){s.send(s.G.player.target);s.step(delta)}
