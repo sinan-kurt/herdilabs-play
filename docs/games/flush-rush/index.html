@@ -259,8 +259,8 @@ const C = {
 };
 
 const SAVE_KEY = "flushrush_web_v1";
-const defUp = () => ({paspas:0,pompa:0,kova:0,ayakkabi:0,kabin:0,koku:0});
-const defaultSave = () => ({day:1, money:0, up:defUp(), best:0, sehaMet:false});
+const defUp = () => ({paspas:0,pompa:0,kova:0,ayakkabi:0,kabin:0,koku:0,robot:0});
+const defaultSave = () => ({day:1, money:0, up:defUp(), best:0, met:{}});
 let save = defaultSave();
 try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)||"null"); if(s && s.up) save = Object.assign(defaultSave(), s, {up:Object.assign(defUp(), s.up)}); } catch(e){}
 const persist = () => { try{ localStorage.setItem(SAVE_KEY, JSON.stringify(save)); }catch(e){} };
@@ -271,6 +271,7 @@ const UPGRADES = [
   {id:"kova", name:"Büyük Sepet", desc:"Arabadan +2 stok taşırsın.", costs:[25,55]},
   {id:"ayakkabi", name:"Kaymaz Ayakkabı", desc:"Yürüme hızı +%15.", costs:[35,75]},
   {id:"koku", name:"Lavanta Spreyi", desc:"Müşteri sabrı +%25. Burası artık ferah.", costs:[60]},
+  {id:"robot", name:"Talha-3000", desc:"Yerleri kendi kendine silen robot paspas. Fikir: Talha.", costs:[180]},
   {id:"kabin", name:"4. Kabin", desc:"Kapalı kabini açar, kuyruk erir.", costs:[120]},
 ];
 const TYPES = {
@@ -289,8 +290,17 @@ const TYPES = {
   // thank-you cameo for the game's first playtester: drops in now and then, never in the regular pool
   seha:    {name:"Seha · İlk Testçi", col:"#2bb3a3", patience:40, speed:80, use:[3,4], dirt:.05, clog:.03, fee:9, day:2, special:true, tag:"Seha",
             desc:"Oyunun ilk testçisi. Kabinlerdeki kâğıdı sayar, yolları ezbere bilir, bahşişi cömerttir. Teşekkürler Seha!",
-            barks:["Kaç rulo kaldı bakayım...","Araba önden de alınıyor artık, güzel.","Not alıyorum, devam."]},
+            barks:["Kaç rulo kaldı bakayım...","Araba önden de alınıyor artık, güzel.","Not alıyorum, devam."],
+            first:["Bu sefer tuvalet kâğıdı var, güzel!"], noPaper:"Yine mi kâğıt yok?! Bunu da rapora yazıyorum."},
+  talha:   {name:"Talha · Fikir Babası", col:"#f2a93b", patience:36, speed:72, use:[3,4], dirt:.06, clog:.04, fee:9, day:3, special:true, tag:"Talha",
+            desc:"Robot paspas fikri ondan çıktı. Tuvaleti büyütmek ister, oyunu telefonda görmek ister. Teşekkürler Talha!",
+            barks:["Yeni kabin açalım abi, genişletelim!","Abi bu oyun Google Play'e ne zaman geliyor?","Level de gelsin abi, level!"],
+            robotBarks:["Talha-3000 iş başında, helal olsun!","Robot paspas! Tam istediğim gibi."],
+            first:["Ellerine sağlık abi, tam aradığım tarz!"], noPaper:"Abi kâğıt yok, robota kâğıt da taktıralım!"},
 };
+// cameo guests: first visit from their day on is guaranteed, after that about every other day
+const GUESTS = Object.keys(TYPES).filter(k => TYPES[k].special);
+const metGuest = k => !!((save.met && save.met[k]) || (k==="seha" && save.sehaMet));
 
 let actx = null, soundOn = true, musicOn = true;
 try{ musicOn = localStorage.getItem("flushrush_music") !== "0"; }catch(e){}
@@ -387,7 +397,7 @@ let G = null;
 const upLv = id => save.up[id]||0;
 function stats(){ return {
   mop: .8*(1+.35*upLv("paspas")), scrub: .75*(1+.35*upLv("paspas")), plunge: .5*(1+.4*upLv("pompa")),
-  carry: 3+2*upLv("kova"), speed: 190*(1+.15*upLv("ayakkabi")), patience: 1+.25*upLv("koku"), stalls: 3+upLv("kabin") }; }
+  carry: 3+2*upLv("kova"), speed: 190*(1+.15*upLv("ayakkabi")), patience: 1+.25*upLv("koku"), stalls: 3+upLv("kabin"), robot: upLv("robot") }; }
 const makeSpots = n => Array.from({length:n}, () => ({x:rand(-40,40), y:rand(-10,55), r:rand(5,12), c:pick([C.plum,C.rot,C.brown])}));
 function newDay(){
   const S = stats();
@@ -396,7 +406,7 @@ function newDay(){
   const sinks = [0,1].map(i => ({i, x:770+i*86, fx:770+i*86, fy:84, dirt:0, soap:4, occ:null, res:null, spots:makeSpots(5)}));
   G = { t:0, dayLen:150, closing:false, S, stalls, sinks, puddles:[], customers:[], queue:[], particles:[], floats:[],
     player:{x:470, y:360, dir:1, carry:0, work:null, target:null, walk:null, bob:0, mopping:false, nagT:0},
-    sehaT: save.day>=2 && (!save.sehaMet || Math.random()<.5) ? rand(30, 100) : -1,
+    guestT: Object.fromEntries(GUESTS.map((k,i) => [k, save.day>=TYPES[k].day && (!metGuest(k) || Math.random()<.5) ? rand(30, 100) + i*25 : -1])),
     spawnT:2, train:newTrain(), trickleT:rand(8,14), served:0, angry:0, slips:0, revenue:0, satSum:0, satN:0, shake:0, speed:1, marker:null };
 }
 const decor = {
@@ -669,9 +679,10 @@ function updateCustomer(c, dt){
       const s = c.stall; c.timer -= dt;
       if(c.type==="telefon" && Math.random()<dt*.25) say(c, pick(TYPES.telefon.barks), 2.6);
       if(c.timer<=0){
-        if(c.type==="seha"){ const first = !save.sehaMet; save.sehaMet = true; persist();
-          say(c, s.paper>0 ? (first ? "Bu sefer tuvalet kâğıdı var, güzel!" : pick(TYPES.seha.barks)) : "Yine mi kâğıt yok?! Bunu da rapora yazıyorum.", 3.2); }
-        if(s.paper>0) s.paper--; else if(c.type==="seha") c.sat-=20; else { c.sat-=35; say(c, pick(["KAĞIT YOK MU YA?!","Peçeteyle mi idare edeyim?","Bu ne çile..."]), 2.6); sfx.angry(); }
+        if(c.T.special){ const first = !metGuest(c.type); save.met = save.met || {}; save.met[c.type] = true; persist();
+          const pool = c.T.robotBarks && G.S.robot ? c.T.robotBarks : c.T.barks;
+          say(c, s.paper>0 ? pick(first ? c.T.first : pool) : c.T.noPaper, 3.2); }
+        if(s.paper>0) s.paper--; else if(c.T.special) c.sat-=20; else { c.sat-=35; say(c, pick(["KAĞIT YOK MU YA?!","Peçeteyle mi idare edeyim?","Bu ne çile..."]), 2.6); sfx.angry(); }
         if(s.dirt<=0) s.spots = makeSpots(9);
         s.dirt = clamp(s.dirt + c.T.dirt*rand(.7,1.2), 0, 1);
         if(Math.random()<c.T.clog){ s.clog=true; say(c, pick(["Ehm... sifon bir tuhaf.","Ben bir şey yapmadım.","Su yükseliyor mu o?"]), 2.6); burst(s.cx,s.cy+10,20,6,C.water,50); }
@@ -773,6 +784,52 @@ function updatePlayer(dt){
   }
 }
 
+// ---------- Talha-3000: slow robot mop that heads for the nearest puddle and docks when the floor is dry ----------
+const DOCK = {x:350, y:520};
+function updateRobot(dt){
+  if(!G.S.robot){ G.robot = null; return; }
+  const r = G.robot || (G.robot = {x:DOCK.x, y:DOCK.y, path:[], goal:null, dir:1, spin:0, hi:false});
+  if(!r.hi){ r.hi = true; floatText(r.x, r.y, 40, "Talha-3000 hazır!", C.good, true); }
+  const alive = r.goal && r.goal!=="dock" && G.puddles.includes(r.goal);
+  if(!alive){
+    let best = null, bd = Infinity; for(const p of G.puddles){ const d = dist(r.x, r.y, p.x, p.y); if(d<bd){ bd=d; best=p; } }
+    const goal = best || "dock";
+    if(goal!==r.goal){ r.goal = goal; const g = best ? freeSpot({x:best.x, y:best.y}) : DOCK; r.path = routeBetween({x:r.x, y:r.y}, g); }
+  }
+  let mop = false;
+  for(const p of G.puddles) if(dist(r.x, r.y, p.x, p.y) < p.r+6){
+    mop = true; p.amt -= .32*dt;
+    if(Math.random()<dt*8) bubbles(p.x, p.y, 2);
+    if(p.amt<=0){ sparkle(p.x, p.y); sfx.sparkle(); }
+  }
+  G.puddles = G.puddles.filter(p => p.amt>0);
+  const sp = 78*(mop?.45:1)*dt;
+  while(r.path.length){ const q = r.path[0], dx = q.x-r.x, dy = q.y-r.y, d = Math.hypot(dx,dy);
+    if(Math.abs(dx-dy)>1) r.dir = (dx-dy)>0 ? 1 : -1;
+    if(d<=sp){ r.x=q.x; r.y=q.y; r.path.shift(); } else { r.x += dx/d*sp; r.y += dy/d*sp; break; } }
+  r.spin += dt*(mop ? 14 : r.path.length ? 6 : 0);
+}
+function drawRobot(){
+  const r = G.robot; if(!r) return;
+  const p = P(r.x, r.y), t = performance.now()/1000, bob = reduceMotion ? 0 : Math.sin(t*6)*.6;
+  shadow(r.x, r.y, 16, 8);
+  ctx.save(); ctx.translate(p[0], p[1]-4+bob);
+  // body: a squat disc seen in iso
+  ctx.beginPath(); ctx.ellipse(0, 0, 16, 8.5, 0, 0, Math.PI); ctx.lineTo(-16, -6); ctx.ellipse(0, -6, 16, 8.5, 0, Math.PI, 0, true); ctx.closePath();
+  ctx.fillStyle = "#d18a22"; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.6; ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(0, -6, 16, 8.5, 0, 0, 6.3); ctx.fillStyle = "#f2a93b"; ctx.fill(); ctx.stroke();
+  // spinning brush marks + eye
+  ctx.strokeStyle = "rgba(59,50,38,.45)"; ctx.lineWidth = 1.2;
+  for(let i=0;i<3;i++){ const a = r.spin + i*2.09; ctx.beginPath(); ctx.moveTo(Math.cos(a)*6, -6+Math.sin(a)*3); ctx.lineTo(Math.cos(a)*12, -6+Math.sin(a)*6.3); ctx.stroke(); }
+  ctx.beginPath(); ctx.ellipse(r.dir*7, -8, 3.4, 2, 0, 0, 6.3); ctx.fillStyle = "#2b2b2b"; ctx.fill();
+  ctx.beginPath(); ctx.arc(r.dir*7.6, -8.4, 1, 0, 6.3); ctx.fillStyle = "#8fe3f0"; ctx.fill();
+  ctx.restore();
+  // name tag
+  ctx.font = "900 10px Nunito, sans-serif"; const txt = "Talha-3000", tw = ctx.measureText(txt).width+12, ty = p[1]-30;
+  rr(p[0]-tw/2, ty-7, tw, 14, 7); ctx.fillStyle = "#f2a93b"; ctx.fill(); ctx.strokeStyle = C.ink; ctx.lineWidth = 1.3; ctx.stroke();
+  ctx.fillStyle = "#fff"; ctx.textAlign = "center"; ctx.textBaseline = "middle"; ctx.fillText(txt, p[0], ty+.5);
+}
+
 function update(dt){
   G.t += dt;
   autoT += dt; if(autoT > 4){ autoT = 0; autosave(); }
@@ -785,7 +842,9 @@ function update(dt){
   if(!G.closing && !G.noWave){ G.trickleT -= dt; if(G.trickleT<=0){
     G.trickleT = Math.max(16, 26 - save.day)*rand(.8,1.2);
     if(G.queue.length < 4 && G.customers.length < 9) spawnCustomer(); } }
-  if(G.sehaT>0 && !G.closing && !G.tut){ G.sehaT -= dt; if(G.sehaT<=0){ if(G.queue.length<5 && !G.customers.some(c=>c.type==="seha")) spawnCustomer(null, "seha"); else G.sehaT = 6; } }
+  if(G.guestT && !G.closing && !G.tut) for(const k of GUESTS){ if(!(G.guestT[k]>0)) continue; G.guestT[k] -= dt;
+    if(G.guestT[k]<=0){ if(G.queue.length<5 && !G.customers.some(c=>c.T && c.T.special)) spawnCustomer(null, k); else G.guestT[k] = 6; } }
+  updateRobot(dt);
   updatePlayer(dt);
   G.customers.forEach(c => updateCustomer(c, dt));
   G.customers = G.customers.filter(c=>!c.dead);
@@ -1299,6 +1358,7 @@ const LOOKS = {
   pis:     {shirt:"#9a7b45", shirtD:"#7d6233", pants:"#6b5a44", hair:"#4a3a2a", hairStyle:"messy", beanie:"#6d8a4a", stains:true, flies:true},
   tikayici:{shirt:"#79b84a", shirtD:"#5f9a36", pants:"#7a6a58", hair:"#d4d4d4", hairStyle:"bald", flatcap:"#7a634b", mustache:"#e4e4e4", build:1.25, cane:true},
   telefon: {shirt:"#c38ad9", shirtD:"#a56fbd", pants:"#4b4f6b", hair:"#2c2230", hairStyle:"ponytail", phone:true},
+  talha:   {shirt:"#f2a93b", shirtD:"#d18a22", pants:"#4b4f6b", hair:"#1f1b18", hairStyle:"spiky", phone:true},
   seha:    {shirt:"#2bb3a3", shirtD:"#1f9384", pants:"#3d4157", hair:"#2f2a28", hairStyle:"short", glasses:true},
   vip:     {shirt:"#fbfbf8", shirtD:"#e2e4e6", pants:"#f3f3ef", hair:"#1f1b18", hairStyle:"slick", tie:"#e2a62a", shades:true, chain:true},
   player:  {shirt:"#f7f2e6", shirtD:"#e6dcc6", pants:"#e2a62a", hair:"#3b2a20", hairStyle:"short", overalls:"#e2a62a", overallsD:"#c48a17", cap:"#e8813a", gloves:"#9fd35a"},
@@ -1630,6 +1690,7 @@ function render(){
   for(let y=-16;y<562;y+=60){ const y0=y, y1=Math.min(y+60,562); L.push({d:ROOM.w+y1, f:()=>drawCurb(ROOM.w,ROOM.w+16,y0,y1)}); }
   G.customers.forEach(c => L.push({d:c.x+c.y, f:()=>drawCustomer(c)}));
   L.push({d:G.player.x+G.player.y, f:drawPlayer});
+  if(G.robot) L.push({d:G.robot.x+G.robot.y, f:drawRobot});
   L.sort((a,b)=>a.d-b.d).forEach(o=>o.f());
   drawParticles();
   ctx.setTransform(DPR,0,0,DPR,0,0);
@@ -1789,7 +1850,7 @@ function showShop(){
 function showCodex(){
   pauseForModal();
   openModal(`<h2>${ic("users")}Müşteriler</h2><p class="sub">Her tip uzaktan renginden ve aksesuarından tanınır.</p>
-  <div class="codex">${Object.values(TYPES).map(t => { const open = t.special ? save.sehaMet : t.day<=save.day;
+  <div class="codex">${Object.values(TYPES).map(t => { const open = t.special ? metGuest(Object.keys(TYPES).find(k=>TYPES[k]===t)) : t.day<=save.day;
     return `<div class="ct${open?"":" locked"}"><span class="dot" style="background:${open?t.col:"#e8dcc7"}"></span><div><strong>${open?t.name:"???"}</strong><p>${open?t.desc:t.special?"Sürpriz bir konuk. Gözün kuyrukta olsun.":"Gün "+t.day+"'te gelecek."}</p></div></div>`; }).join("")}</div>`);
 }
 function statsHtml(){
